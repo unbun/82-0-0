@@ -78,8 +78,15 @@ h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: 1.5px; color
   justify-content: center;
   transition: transform 0.15s ease, border-color 0.2s;
 }
-.slot.filled { border-style: solid; background: var(--panel); }
-.slot.just-filled { transform: scale(1.04); border-color: var(--accent); }
+.slot.filled {
+  border-style: solid;
+  border-left: 3px solid var(--team-color, var(--line));
+  background: var(--panel); /* fallback */
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--team-color, var(--panel)) 12%, var(--panel)) 0%,
+    var(--panel) 60%);
+}
+.slot.just-filled { transform: scale(1.04); border-color: var(--team-color, var(--accent)); }
 .slot .slot-label { font-size: 0.68rem; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
 .slot .slot-name { font-weight: 700; font-size: 0.98rem; margin-top: 0.15rem; }
 .slot .slot-meta { font-size: 0.74rem; color: var(--muted); margin-top: 0.1rem; }
@@ -203,18 +210,8 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; padding: 1.
 footer a { color: var(--accent2); text-decoration: none; }
 footer a:hover { text-decoration: underline; }
 
-/* Easter egg */
+/* Easter egg — zero is clickable but shows no indication */
 #easter-zero { cursor: default; }
-#easter-zero.armed { cursor: pointer; text-shadow: 0 0 18px rgba(56,211,159,0.6); }
-#easter-name {
-  display: inline-block; margin-top: 0.5rem;
-  font-size: 0.75rem; letter-spacing: 2px; text-transform: lowercase;
-  color: transparent; cursor: default;
-  transition: color 0.3s;
-  user-select: none;
-}
-#easter-name.visible { color: var(--muted); cursor: pointer; }
-#easter-name.visible:hover { color: var(--accent); }
 
 .toast {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);

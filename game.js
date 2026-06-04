@@ -16,6 +16,18 @@
 
   const catOf = (p) => p.isGoalie ? 'G' : p.pos === 'C' ? 'C' : p.pos === 'D' ? 'D' : 'W';
 
+  // Primary team color for each current franchise (used to tint filled lineup cards).
+  const TEAM_COLORS = {
+    ANA: '#FC4C02', BOS: '#FCB514', BUF: '#003087', CGY: '#C8102E',
+    CAR: '#CC0000', CHI: '#CF0A2C', COL: '#6F263D', CBJ: '#002654',
+    DAL: '#006847', DET: '#CE1126', EDM: '#FF4C00', FLA: '#C8102E',
+    LAK: '#A2AAAD', MIN: '#154734', MTL: '#AF1E2D', NSH: '#FFB81C',
+    NJD: '#CE1126', NYI: '#00539B', NYR: '#0038A8', OTT: '#C52032',
+    PHI: '#F74902', PIT: '#FCB514', SJS: '#006D75', SEA: '#68A7B4',
+    STL: '#002F87', TBL: '#002868', TOR: '#00205B', UTA: '#578E6E',
+    VAN: '#00843D', VGK: '#B4975A', WSH: '#C8102E', WPG: '#004C97',
+  };
+
   // State
   let roster = new Array(SLOTS.length).fill(null);
   let drafted = new Set();
@@ -39,8 +51,13 @@
   }
   const decadesFor = (t) => DATA.decades.filter((d) => t.eras[d]);
 
+  const isJakeAllen = (p) => p.n === 'Jake Allen';
+
   // All open slots a player CAN go into (respects position, not yet filled).
+  // In easter egg mode, Jake Allen can fill any open slot.
   function validSlotsFor(p) {
+    if (easterActive && isJakeAllen(p))
+      return SLOTS.map((s, i) => ({ s, i })).filter((x) => !roster[x.i]);
     const cat = catOf(p);
     return SLOTS.map((s, i) => ({ s, i })).filter((x) => x.s.cat === cat && !roster[x.i]);
   }
@@ -224,7 +241,7 @@
   function placePlayer(p, slot) {
     const { s, i } = slot;
     const offside = !!SIM.offsidePenalty(p.hand, s.side);
-    roster[i] = { ...p, slot: s.code, slotSide: s.side, offside, teamName: curTeam.name, decade: curDecade };
+    roster[i] = { ...p, slot: s.code, slotSide: s.side, offside, teamName: curTeam.name, teamId: curTeam.id, decade: curDecade };
     drafted.add(p.id);
     pendingPlayer = null;
     $('slot-chooser').classList.add('hidden');
@@ -251,6 +268,8 @@
       if (p) {
         div.classList.add('filled');
         if (i === justFilledIdx) div.classList.add('just-filled');
+        const color = TEAM_COLORS[p.teamId];
+        if (color) div.style.setProperty('--team-color', color);
         const disc = p.offside ? Math.round((1 - SIM.offsideDiscount(p)) * 100) : 0;
         const off = disc ? ` <span class="offtag">−${disc}% off-side</span>` : '';
         const key = p.isGoalie
@@ -323,6 +342,7 @@
     drafted = new Set();
     teamRerollLeft = 1;
     decadeRerollLeft = 1;
+    easterActive = false;
     curTeam = curDecade = pendingPlayer = null;
     $('slot-chooser').classList.add('hidden');
     PLAYER_LISTS.forEach((id) => { $(id).classList.remove('hidden'); $(id).innerHTML = ''; });
@@ -353,34 +373,31 @@
 
   renderSlots();
 
-  // ── easter egg: click the trailing 0 → "unnas" appears → infinite rerolls ──
+  // ── easter egg ────────────────────────────────────────────────────────────
+  // Click the trailing "0", then type "jake" anywhere. No visual feedback on
+  // the click. On activation: infinite rerolls + Jake Allen can play any position.
   let easterArmed = false;
-  const easterZero = $('easter-zero');
-  const easterName = $('easter-name');
+  let easterTyped = '';
+  const EASTER_WORD = 'jake';
+  let easterActive = false;
 
-  easterZero.addEventListener('click', () => {
+  $('easter-zero').addEventListener('click', () => {
     easterArmed = true;
-    easterZero.classList.add('armed');
-    easterName.classList.add('visible');
-    // auto-disarm after 4 s if they don't click "unnas"
-    setTimeout(() => {
-      if (easterArmed) {
-        easterArmed = false;
-        easterZero.classList.remove('armed');
-        easterName.classList.remove('visible');
-      }
-    }, 4000);
+    easterTyped = '';
+    setTimeout(() => { easterArmed = false; easterTyped = ''; }, 8000);
   });
 
-  easterName.addEventListener('click', () => {
+  document.addEventListener('keydown', (e) => {
     if (!easterArmed) return;
-    easterArmed = false;
-    easterZero.classList.remove('armed');
-    easterName.classList.remove('visible');
-    teamRerollLeft = Infinity;
-    decadeRerollLeft = Infinity;
-    // refresh reroll button state if the pick panel is open
-    if (!$('pick-panel').classList.contains('hidden')) showPick();
-    toast('∞ rerolls — dev mode');
+    easterTyped += e.key.toLowerCase();
+    if (!EASTER_WORD.startsWith(easterTyped)) { easterTyped = ''; return; }
+    if (easterTyped === EASTER_WORD) {
+      easterArmed = false;
+      easterActive = true;
+      teamRerollLeft = Infinity;
+      decadeRerollLeft = Infinity;
+      if (!$('pick-panel').classList.contains('hidden')) showPick();
+      toast('🏒 jake mode');
+    }
   });
 })();
