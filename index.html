@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>82-0-0 — Build an undefeated NHL all-time team</title>
+  <meta name="description" content="Roll a random NHL franchise + decade, draft a legend, build a 6-player all-time lineup, and see if you can go 82-0-0: 82 wins, 0 losses, 0 ties." />
+  <meta property="og:title" content="82-0-0" />
+  <meta property="og:description" content="Can you build an NHL all-time roster that goes 82-0-0?" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏒</text></svg>" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>82<span class="dash">-</span>0<span class="dash">-</span>0</h1>
+    <p class="tag">Build an NHL all-time roster. Can you go <strong>82 wins, 0 losses, 0 ties?</strong></p>
+  </header>
+
+  <main>
+    <!-- Roster slots -->
+    <section id="roster" aria-label="Your lineup">
+      <h2>Your Lineup <span id="roster-count" class="muted"></span></h2>
+      <div id="slots" class="slots"></div>
+      <p class="hint">Six fixed slots: <strong>3 forwards, 2 defensemen, 1 goalie</strong>. Each pick locks its slot — no swapping it later without starting over.</p>
+    </section>
+
+    <!-- The roll / draft panel -->
+    <section id="draft" aria-label="Draft">
+      <div id="roll-panel" class="panel">
+        <button id="roll-btn" class="primary big">🎲 Roll first pick</button>
+        <p class="muted small">Each roll gives you a random franchise &amp; decade. Pick one player — that's locked in.</p>
+      </div>
+
+      <div id="pick-panel" class="panel hidden">
+        <div class="roll-head">
+          <span id="roll-team" class="roll-team"></span>
+          <span id="roll-decade" class="roll-decade"></span>
+        </div>
+        <p class="muted small" id="roll-sub">Pick one player to draft. Greyed-out positions are already filled.</p>
+        <div id="players" class="players"></div>
+        <div class="center" style="margin-top:0.9rem;">
+          <button id="reroll-btn" class="ghost">🔄 Reroll team &amp; players (1 left)</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Simulate button -->
+    <div class="center">
+      <button id="sim-btn" class="primary big hidden">▶ Simulate the season</button>
+    </div>
+
+    <!-- Result -->
+    <section id="result" class="panel hidden" aria-live="polite">
+      <div id="record" class="record"></div>
+      <div id="verdict" class="verdict"></div>
+      <div id="result-roster" class="result-roster"></div>
+      <div id="stat-line" class="muted small"></div>
+      <div class="center" style="margin-top:1.25rem;">
+        <button id="share-btn" class="ghost">📋 Copy result</button>
+        <button id="again-btn" class="primary">↻ Build another team</button>
+      </div>
+    </section>
+    <details id="how">
+      <summary>How the simulation works</summary>
+      <div class="how-body">
+        <p>Skaters and goalies are rated on <strong>different axes</strong>: a skater's rating is offense/skill (it drives goals you <em>score</em>); a goalie's rating is goaltending (it drives goals you <em>allow</em>). Defensemen help on both ends; forwards chip in a little on defense.</p>
+        <p>Your six picks collapse into two team ratings (0–99):</p>
+        <pre>attack  = 0.75·avgForward + 0.25·avgDefense
+defense = 0.62·goalie + 0.26·avgDefense + 0.12·avgForward</pre>
+        <p>Those map to expected goals per game:</p>
+        <pre>xGF = -7.31 + attack  × 0.1304   (attack 76 → 2.6, 99 → 5.6)
+xGA = 14.51 - defense × 0.1475   (defense 76 → 3.3, 96 → 0.3)</pre>
+        <p>Then 82 games are simulated: each game draws <code>goalsFor ~ Poisson(xGF)</code> and <code>goalsAgainst ~ Poisson(xGA)</code>. More goals = win, fewer = loss, equal = tie. The random draws are <strong>seeded from your exact roster</strong>, so the same lineup always returns the same record — perfect for bragging. Going 82-0-0 needs an elite, balanced lineup <em>and</em> a little variance luck.</p>
+      </div>
+    </details>
+  </main>
+
+  <footer>
+    <p>Inspired by <a href="https://www.82-0.com/" target="_blank" rel="noopener">82-0</a> (NBA). Relocated franchises are folded into today's 32 teams.
+       Player ratings are hand-curated and intentionally debatable — that's the fun. <a href="https://github.com/" id="repo-link" target="_blank" rel="noopener">Source &amp; data on GitHub</a>.</p>
+  </footer>
+
+  <script src="data.js"></script>
+  <script src="sim.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
