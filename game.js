@@ -112,22 +112,27 @@
 
   // ── show current roll ────────────────────────────────────────────────────
 
+  const PLAYER_LISTS = ['fwds', 'dmen', 'goalies'];
+
   function showPick() {
     pendingPlayer = null;
     $('slot-chooser').classList.add('hidden');
-    $('players').classList.remove('hidden');
+    PLAYER_LISTS.forEach((id) => $(id).classList.remove('hidden'));
 
     $('roll-team').textContent = curTeam.name;
     $('roll-decade').textContent = curDecade;
 
     const pool = poolFor(curTeam, curDecade);
-    const skaters = pool.filter((p) => !p.isGoalie);
+    const fwds = pool.filter((p) => !p.isGoalie && (p.pos === 'C' || p.pos === 'L' || p.pos === 'R'));
+    const dmen = pool.filter((p) => !p.isGoalie && p.pos === 'D');
     const goalies = pool.filter((p) => p.isGoalie);
 
-    const list = $('players');
-    list.innerHTML = '';
+    const fwdList = $('fwds');
+    const dList = $('dmen');
+    const gList = $('goalies');
+    fwdList.innerHTML = ''; dList.innerHTML = ''; gList.innerHTML = '';
 
-    const addGroup = (title, arr) => {
+    const addGroup = (title, arr, list) => {
       if (!arr.length) return;
       const h = document.createElement('div'); h.className = 'plist-head'; h.textContent = title;
       list.appendChild(h);
@@ -160,8 +165,9 @@
       }
     };
 
-    addGroup('Skaters — by PPG', skaters);
-    addGroup('Goalies — by games played', goalies);
+    addGroup('Forwards — by PPG', fwds, fwdList);
+    addGroup('Defense — by PPG', dmen, dList);
+    addGroup('Goalies — by GP', goalies, gList);
 
     $('reroll-team').disabled = teamRerollLeft <= 0;
     $('reroll-decade').disabled = decadeRerollLeft <= 0;
@@ -188,7 +194,7 @@
     }
     // Multiple valid slots — let the user choose.
     pendingPlayer = p;
-    $('players').classList.add('hidden');
+    PLAYER_LISTS.forEach((id) => $(id).classList.add('hidden'));
     const sc = $('slot-chooser');
     sc.classList.remove('hidden');
     $('sc-name').textContent = p.n;
@@ -210,7 +216,7 @@
     cancel.addEventListener('click', () => {
       pendingPlayer = null;
       sc.classList.add('hidden');
-      $('players').classList.remove('hidden');
+      PLAYER_LISTS.forEach((id) => $(id).classList.remove('hidden'));
     });
     btns.appendChild(cancel);
   }
@@ -319,7 +325,7 @@
     decadeRerollLeft = 1;
     curTeam = curDecade = pendingPlayer = null;
     $('slot-chooser').classList.add('hidden');
-    $('players').classList.remove('hidden');
+    PLAYER_LISTS.forEach((id) => { $(id).classList.remove('hidden'); $(id).innerHTML = ''; });
     renderSlots();
     $('result').classList.add('hidden');
     $('sim-btn').classList.add('hidden');

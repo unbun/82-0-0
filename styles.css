@@ -118,8 +118,11 @@ h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: 1.5px; color
 .reroll-mini:hover:not(:disabled) { border-color: var(--accent2); color: var(--text); }
 .reroll-mini:disabled { opacity: 0.3; cursor: not-allowed; }
 
-/* Scrollable player list with per-game stats */
-.players { margin-top: 0.6rem; max-height: 56vh; overflow-y: auto; display: flex; flex-direction: column; gap: 0.35rem; padding-right: 0.2rem; }
+/* 3-column layout: Forwards | Defense | Goalies */
+.pick-lists { display: grid; grid-template-columns: 1fr 1fr 220px; gap: 0.7rem; margin-top: 0.6rem; align-items: start; }
+@media (max-width: 640px) { .pick-lists { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 420px) { .pick-lists { grid-template-columns: 1fr; } }
+.players { max-height: 56vh; overflow-y: auto; display: flex; flex-direction: column; gap: 0.35rem; padding-right: 0.2rem; }
 .plist-head { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin: 0.5rem 0 0.1rem; position: sticky; top: 0; background: var(--panel); padding: 0.2rem 0; }
 .player {
   display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
