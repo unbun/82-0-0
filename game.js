@@ -15,7 +15,9 @@
     { label: 'Right Defense', code: 'RD', cat: 'D', side: 'R' },
     { label: 'Goalie',        code: 'G',  cat: 'G' },
   ];
-  const REROLLS_PER_ROSTER = 1; // one reroll (of team OR decade) for the whole draft
+  // Two independent one-time rerolls per run — one Team reroll (swaps the
+  // franchise, keeps the decade) and one Decade reroll (swaps the decade, keeps
+  // the franchise). Each burns independently; using one doesn't affect the other.
 
   const POS_LABEL = { C: 'C', L: 'LW', R: 'RW', D: 'D' };
   const catOf = (p) => (p.isGoalie ? 'G' : p.pos === 'C' ? 'C' : p.pos === 'D' ? 'D' : 'W');
@@ -23,7 +25,8 @@
   // State
   let roster = new Array(SLOTS.length).fill(null);
   let drafted = new Set();           // player ids already taken
-  let rerollLeft = REROLLS_PER_ROSTER;
+  let teamRerollLeft = 1;            // one Team reroll per run
+  let decadeRerollLeft = 1;          // one Decade reroll per run
   let curTeam = null, curDecade = null;
 
   const $ = (id) => document.getElementById(id);
@@ -66,16 +69,20 @@
     showPick();
   }
   function rerollTeam() {
-    if (rerollLeft <= 0) return;
+    if (teamRerollLeft <= 0) return;
     const opts = TEAMS.filter((t) => t !== curTeam && t.eras[curDecade] && bucketHasPick(t, curDecade));
     if (!opts.length) return;
-    rerollLeft--; curTeam = rnd(opts); showPick();
+    teamRerollLeft--;
+    curTeam = rnd(opts);
+    showPick();
   }
   function rerollDecade() {
-    if (rerollLeft <= 0) return;
+    if (decadeRerollLeft <= 0) return;
     const opts = decadesFor(curTeam).filter((d) => d !== curDecade && bucketHasPick(curTeam, d));
     if (!opts.length) return;
-    rerollLeft--; curDecade = rnd(opts); showPick();
+    decadeRerollLeft--;
+    curDecade = rnd(opts);
+    showPick();
   }
 
   // ---- rendering -----------------------------------------------------------
@@ -130,13 +137,15 @@
     addGroup(`Skaters — by points/game`, skaters);
     addGroup(`Goalies — by games played`, goalies);
 
-    // reroll buttons
-    const can = rerollLeft > 0;
-    $('reroll-team').disabled = !can;
-    $('reroll-decade').disabled = !can;
-    $('reroll-note').textContent = can
-      ? `1 reroll left — re-spin the team or the decade`
-      : `no rerolls left`;
+    // reroll buttons — each token is independent
+    $('reroll-team').disabled = teamRerollLeft <= 0;
+    $('reroll-decade').disabled = decadeRerollLeft <= 0;
+    $('reroll-team').title = teamRerollLeft > 0 ? 'Team reroll (1 left)' : 'Team reroll used';
+    $('reroll-decade').title = decadeRerollLeft > 0 ? 'Decade reroll (1 left)' : 'Decade reroll used';
+    const parts = [];
+    if (teamRerollLeft > 0) parts.push('Team reroll available');
+    if (decadeRerollLeft > 0) parts.push('Decade reroll available');
+    $('reroll-note').textContent = parts.length ? parts.join(' · ') : 'No rerolls left';
 
     $('roll-panel').classList.add('hidden');
     $('pick-panel').classList.remove('hidden');
@@ -232,7 +241,8 @@
   function reset() {
     roster = new Array(SLOTS.length).fill(null);
     drafted = new Set();
-    rerollLeft = REROLLS_PER_ROSTER;
+    teamRerollLeft = 1;
+    decadeRerollLeft = 1;
     curTeam = curDecade = null;
     renderSlots();
     $('result').classList.add('hidden');
