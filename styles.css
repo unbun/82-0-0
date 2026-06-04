@@ -132,23 +132,22 @@ h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: 1.5px; color
 .players { max-height: 56vh; overflow-y: auto; display: flex; flex-direction: column; gap: 0.35rem; padding-right: 0.2rem; }
 .plist-head { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin: 0.5rem 0 0.1rem; position: sticky; top: 0; background: var(--panel); padding: 0.2rem 0; }
 .player {
-  display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 0.3rem;
   background: var(--bg2); border: 1px solid var(--line); border-radius: 10px;
-  padding: 0.5rem 0.7rem; cursor: pointer; text-align: left; color: var(--text);
-  font: inherit; transition: border-color 0.15s, transform 0.1s;
+  padding: 0.45rem 0.65rem; cursor: pointer; text-align: left; color: var(--text);
+  font: inherit; transition: border-color 0.15s, transform 0.1s; width: 100%;
 }
 .player:hover:not(:disabled) { border-color: var(--accent); transform: translateX(2px); }
 .player:disabled { opacity: 0.38; cursor: not-allowed; }
 .player.off { border-style: dashed; }
-.pinfo { display: flex; align-items: center; gap: 0.45rem; min-width: 38%; }
-.player .pname { font-weight: 700; }
-.player .hand { font-size: 0.6rem; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 0.25rem; }
-.stats { display: flex; flex-wrap: wrap; gap: 0.3rem 0.55rem; justify-content: flex-end; }
-.st { font-size: 0.72rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pinfo { display: flex; align-items: center; gap: 0.4rem; width: 100%; min-width: 0; }
+.player .pname { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.player .hand { flex-shrink: 0; font-size: 0.6rem; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 0.25rem; }
+.stats { display: flex; flex-wrap: wrap; gap: 0.2rem 0.45rem; width: 100%; }
+.st { font-size: 0.70rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .st b { color: var(--text); font-weight: 700; }
 .st b.imp { color: var(--muted); }
-.offtag { font-size: 0.6rem; font-weight: 800; color: var(--bad); margin-left: 0.4rem; letter-spacing: 0.5px; }
-@media (max-width: 560px) { .stats { gap: 0.2rem 0.4rem; } .st { font-size: 0.66rem; } .pinfo { min-width: 0; } }
+.offtag { font-size: 0.6rem; font-weight: 800; color: var(--bad); margin-left: 0.35rem; letter-spacing: 0.5px; white-space: nowrap; }
 
 /* Slot chooser — shown when a player can fill multiple open slots */
 #slot-chooser { padding-top: 0.5rem; }
