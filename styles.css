@@ -200,6 +200,19 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; padding: 1.
 footer a { color: var(--accent2); text-decoration: none; }
 footer a:hover { text-decoration: underline; }
 
+/* Easter egg */
+#easter-zero { cursor: default; }
+#easter-zero.armed { cursor: pointer; text-shadow: 0 0 18px rgba(56,211,159,0.6); }
+#easter-name {
+  display: inline-block; margin-top: 0.5rem;
+  font-size: 0.75rem; letter-spacing: 2px; text-transform: lowercase;
+  color: transparent; cursor: default;
+  transition: color 0.3s;
+  user-select: none;
+}
+#easter-name.visible { color: var(--muted); cursor: pointer; }
+#easter-name.visible:hover { color: var(--accent); }
+
 .toast {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
   background: var(--accent); color: #04241a; font-weight: 800;

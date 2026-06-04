@@ -346,4 +346,35 @@
   });
 
   renderSlots();
+
+  // ── easter egg: click the trailing 0 → "unnas" appears → infinite rerolls ──
+  let easterArmed = false;
+  const easterZero = $('easter-zero');
+  const easterName = $('easter-name');
+
+  easterZero.addEventListener('click', () => {
+    easterArmed = true;
+    easterZero.classList.add('armed');
+    easterName.classList.add('visible');
+    // auto-disarm after 4 s if they don't click "unnas"
+    setTimeout(() => {
+      if (easterArmed) {
+        easterArmed = false;
+        easterZero.classList.remove('armed');
+        easterName.classList.remove('visible');
+      }
+    }, 4000);
+  });
+
+  easterName.addEventListener('click', () => {
+    if (!easterArmed) return;
+    easterArmed = false;
+    easterZero.classList.remove('armed');
+    easterName.classList.remove('visible');
+    teamRerollLeft = Infinity;
+    decadeRerollLeft = Infinity;
+    // refresh reroll button state if the pick panel is open
+    if (!$('pick-panel').classList.contains('hidden')) showPick();
+    toast('∞ rerolls — dev mode');
+  });
 })();
