@@ -51,6 +51,14 @@
   }
   const decadesFor = (t) => DATA.decades.filter((d) => t.eras[d]);
 
+  // All slot-position labels a player is intrinsically eligible for.
+  function positionTags(p) {
+    if (p.isGoalie) return `<span class="pos G">G</span>`;
+    if (p.pos === 'C')  return `<span class="pos C">C</span>`;
+    if (p.pos === 'D')  return `<span class="pos D">LD</span><span class="pos D">RD</span>`;
+    return `<span class="pos W">LW</span><span class="pos W">RW</span>`;
+  }
+
   const isJakeAllen = (p) => p.n === 'Jake Allen';
 
   // All open slots a player CAN go into (respects position, not yet filled).
@@ -65,14 +73,6 @@
   const bucketHasPick = (team, decade) => poolFor(team, decade).some(isPickable);
   const filledCount = () => roster.filter(Boolean).length;
 
-  // Off-side discount for display: returns a string like "−4%" or "" if none.
-  function offsideLabel(p, side) {
-    if (!side || !p.hand || p.hand === 'B') return '';
-    if (p.hand === side) return '';
-    const disc = SIM.offsideDiscount(p);
-    const pct = Math.round((1 - disc) * 100);
-    return `−${pct}%`;
-  }
 
   // ── rolling ──────────────────────────────────────────────────────────────
 
@@ -155,26 +155,13 @@
       list.appendChild(h);
       for (const p of arr) {
         const pickable = isPickable(p);
-        const valids = validSlotsFor(p);
-
-        // For display: show off-side warning for the natural first slot, but
-        // let the user know if an on-side slot also exists.
-        const bestSide = valids[0];
-        const offLabel = bestSide ? offsideLabel(p, bestSide.s.side) : '';
-        const allOnSide = valids.some((v) => !offsideLabel(p, v.s.side));
-
         const row = document.createElement('button');
-        row.className = 'player' + (offLabel && !allOnSide ? ' off' : '');
+        row.className = 'player';
         row.disabled = !pickable;
-
-        const tag = p.isGoalie ? 'G' : (p.pos === 'C' ? 'C' : p.pos === 'D' ? 'D' : p.pos === 'L' ? 'LW' : 'RW');
         const hand = p.isGoalie ? '' : ` <span class="hand">${p.hand || '?'}</span>`;
-        const offWarn = offLabel && !allOnSide
-          ? `<span class="offtag">${offLabel} off-side</span>` : '';
-
         row.innerHTML =
-          `<span class="pinfo"><span class="pos ${catOf(p)}">${tag}</span>${hand}` +
-          `<span class="pname">${p.n}${offWarn ? ' ' + offWarn : ''}</span></span>` +
+          `<span class="pinfo">${positionTags(p)}${hand}` +
+          `<span class="pname">${p.n}</span></span>` +
           `<span class="stats">${statBadges(p)}</span>`;
 
         row.addEventListener('click', () => onPlayerClick(p));
@@ -219,11 +206,9 @@
     const btns = $('sc-buttons');
     btns.innerHTML = '';
     for (const { s, i } of valids) {
-      const offLabel = offsideLabel(p, s.side);
       const btn = document.createElement('button');
-      btn.className = 'sc-btn' + (offLabel ? ' off' : '');
-      const disc = offLabel ? ` <span class="offtag">${offLabel} off-side</span>` : '';
-      btn.innerHTML = `<strong>${s.label}</strong>${disc}`;
+      btn.className = 'sc-btn';
+      btn.innerHTML = `<strong>${s.label}</strong>`;
       btn.addEventListener('click', () => placePlayer(p, { s, i }));
       btns.appendChild(btn);
     }
@@ -270,14 +255,12 @@
         if (i === justFilledIdx) div.classList.add('just-filled');
         const color = TEAM_COLORS[p.teamId];
         if (color) div.style.setProperty('--team-color', color);
-        const disc = p.offside ? Math.round((1 - SIM.offsideDiscount(p)) * 100) : 0;
-        const off = disc ? ` <span class="offtag">−${disc}% off-side</span>` : '';
         const key = p.isGoalie
           ? `SV% ${(p.svpct * 100).toFixed(1)}`
           : `${(p.gpg + p.apg).toFixed(2)} PPG`;
         div.innerHTML =
           `<span class="slot-label">${slot.label}</span>` +
-          `<span class="slot-name">${p.n}${off}</span>` +
+          `<span class="slot-name">${p.n}</span>` +
           `<span class="slot-meta">${p.teamName} · ${p.decade} · ${key}</span>`;
       } else {
         div.innerHTML = `<span class="slot-label">${slot.label}</span><span class="empty-tip">—</span>`;
@@ -308,9 +291,7 @@
     $('verdict').innerHTML = `${v.text} <span class="pts">(${r.points} pts)</span>`;
     $('result-roster').innerHTML = SLOTS.map((slot, i) => {
       const p = roster[i];
-      const disc = p.offside ? Math.round((1 - SIM.offsideDiscount(p)) * 100) : 0;
-      const off = disc ? ` <span class="offtag">−${disc}%</span>` : '';
-      return `<span class="chip"><span class="pos ${catOf(p)}">${slot.code}</span> ${p.n}${off}</span>`;
+      return `<span class="chip"><span class="pos ${catOf(p)}">${slot.code}</span> ${p.n}</span>`;
     }).join('');
     $('stat-line').innerHTML =
       `Attack <strong>${r.attack}</strong> · Defense <strong>${r.defense}</strong> — ` +
@@ -324,8 +305,7 @@
     const r = SIM.simulateSeason(roster);
     const lines = SLOTS.map((slot, i) => {
       const p = roster[i];
-      const disc = p.offside ? Math.round((1 - SIM.offsideDiscount(p)) * 100) : 0;
-      return `  ${slot.code.padEnd(2)} ${p.n} (${p.teamName} ${p.decade})${disc ? ` [−${disc}% off-side]` : ''}`;
+      return `  ${slot.code.padEnd(2)} ${p.n} (${p.teamName} ${p.decade})`;
     }).join('\n');
     return `82-0-0 🏒  My all-time NHL lineup went ${r.w}-${r.l}-${r.t} (${r.points} pts)\n${lines}\nBuild yours!`;
   }

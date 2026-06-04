@@ -60,13 +60,13 @@
 
   const isGoalie = (p) => typeof p.svpct === 'number';
 
-  // Off-side penalty scales DOWN for elite players.
-  // A 99th-percentile scorer (PPG ≥ 1.50) pays almost nothing;
-  // a below-average player (PPG ≤ 0.40) pays the full ~18%.
-  // Formula: MAX_DISCOUNT × (1 − clamp(ppg/PPG_ELITE, 0, 1) × ELITE_FORGIVE)
-  const OFFSIDE_MAX = 0.18;
+  // Off-side penalty: small across the board, essentially invisible for elite D.
+  // Max penalty: 5% for skaters, 0.5% for top-line defensemen (PPG ≥ 0.70).
+  const OFFSIDE_MAX_SKATER = 0.05;
+  const OFFSIDE_MAX_ELITE_D = 0.005;
+  const D_ELITE_PPG = 0.70;
   const PPG_ELITE = 1.50;
-  const ELITE_FORGIVE = 0.80;  // elite players recover up to 80% of the penalty
+  const ELITE_FORGIVE = 0.80;
 
   function offsidePenalty(hand, side) {
     if (!side || hand === 'B' || !hand) return false;
@@ -74,10 +74,10 @@
   }
 
   function offsideDiscount(p) {
-    // fraction by which this player's stats are multiplied when on the off-side
     const ppg = (p.gpg || 0) + (p.apg || 0);
+    if (p.pos === 'D' && ppg >= D_ELITE_PPG) return 1 - OFFSIDE_MAX_ELITE_D;
     const eliteness = Math.min(1, ppg / PPG_ELITE);
-    const discount = OFFSIDE_MAX * (1 - eliteness * ELITE_FORGIVE);
+    const discount = OFFSIDE_MAX_SKATER * (1 - eliteness * ELITE_FORGIVE);
     return 1 - discount;
   }
 
