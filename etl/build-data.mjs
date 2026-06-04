@@ -25,9 +25,9 @@ const AWEB = 'https://api-web.nhle.com/v1';
 const REST = 'https://api.nhle.com/stats/rest/en';
 const MODERN_START = 20052006; // hits/blocks (real-time) tracked from here
 const SHOTS_START_YEAR = 1959;  // shots tracked from 1959-60
-const MIN_GP_FACTOR = 0.25;     // skater must play >= 25% of a decade's games
-const TOP_SKATERS = 30;
-const TOP_GOALIES = 5;
+const MIN_GP_FACTOR = 0.03;     // include any skater who played ~3% of a decade's games
+const TOP_SKATERS = Infinity;   // list every player with data — no cap
+const TOP_GOALIES = 10;
 
 // ---- the 32 current franchises. extraCodes = relocations the NHL counts as a
 // DIFFERENT franchiseId but that we fold in (Utah<-Coyotes lineage, Ottawa<-
@@ -264,7 +264,7 @@ async function main() {
           };
         })
         .sort((x, y) => y.ppg - x.ppg)
-        .slice(0, TOP_SKATERS);
+        .slice(0, TOP_SKATERS === Infinity ? undefined : TOP_SKATERS);
 
       // drop fluke cameos (e.g. a skater who played 1 game in net) so a 1.000
       // save% can't be exploited; fall back to all if none clear the bar.

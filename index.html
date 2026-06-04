@@ -38,8 +38,13 @@
           <span class="roll-chip"><span class="roll-cap">Decade</span><span id="roll-decade" class="roll-decade"></span>
             <button id="reroll-decade" class="reroll-mini" title="Decade reroll (1 per run)">Decade reroll</button></span>
         </div>
-        <p class="muted small"><span id="reroll-note"></span> · pick one player below to lock it in. Greyed rows can't fill an open slot.</p>
+        <p class="muted small"><span id="reroll-note"></span> · click a player to lock them in.</p>
         <div id="players" class="players"></div>
+        <!-- shown when a player can fill multiple slots -->
+        <div id="slot-chooser" class="hidden">
+          <p class="muted small">Place <strong id="sc-name"></strong> in which slot?</p>
+          <div id="sc-buttons" class="sc-buttons"></div>
+        </div>
       </div>
     </section>
 

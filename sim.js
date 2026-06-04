@@ -1,81 +1,171 @@
-/* 82-0-0 — season simulation engine (driven by REAL per-game stats)
+/* 82-0-0 — season simulation engine
  *
- * Input: a lineup of 6 picks — 5 skaters (C, LW, RW, LD, RD) each carrying real
- * per-game rates (goals, assists, shots, blocks, …) and 1 goalie carrying a real
- * save percentage. Each pick may have an `offside` flag (a winger/D played on the
- * wrong side for their shot hand), which discounts their contribution.
+ * METHODOLOGY: Poisson match simulation (Dixon & Coles 1997, adapted for hockey).
+ * Each of 82 games is modeled as two independent Poisson draws:
+ *   goals scored  ~ Poisson(xGF)    goals allowed ~ Poisson(xGA)
+ * where xGF and xGA are derived from your lineup's real per-game stats.
  *
- * Output: a DETERMINISTIC W-L-T record over 82 games. The RNG is seeded from the
- * exact roster, so the same lineup always yields the same record (shareable).
+ * WHY POISSON: Goals are rare, independent events at a roughly constant rate per
+ * game — exactly the conditions that define a Poisson process. It correctly
+ * produces the realistic game-to-game variance (sometimes you blow someone out,
+ * sometimes you lose a squeaker) while centering on your expected rate.
  *
- * The model is the standard hockey approach: estimate expected goals-for and
- * goals-against per game, then simulate each game as independent Poisson draws.
- *   - Offense (xGF): skaters' scoring rates -> goals you SCORE.
- *   - Defense (xGA): goalie save% sets how many shots become goals; the defense
- *     pair suppresses how many shots you face. -> goals you ALLOW.
- * Calibrated (see tools/calibrate) so an all-time lineup can flirt with 82-0-0,
- * an average lineup lands mid-pack, and a weak one sinks.
+ * OFFENSE MODEL (xGF)  — inspired by Hockey Reference's Goals Created and
+ *   Corsi-based expected-goals literature:
+ *   • rawScoring  = Σ skaters (GPG + 0.5·APG)  [scoring involvement]
+ *   • playmakingFactor: real teams need BOTH snipers and playmakers. Assists
+ *     outnumber goals ~1.8:1 in the NHL. A lineup where APG/GPG << 1.8 means
+ *     isolated players who can't set each other up → efficiency penalty.
+ *     A lineup where APG/GPG >> 1.8 means pure playmakers with nobody to finish.
+ *   • shotFactor: SPG drives shot volume (Corsi For); more shots = more chances.
+ *   • physBonus: HIT/G wins puck battles → possession → better scoring position.
+ *   • penaltyCost: PIM/G creates short-handed situations → lost offensive time.
+ *
+ * DEFENSE MODEL (xGA)  — goalie SV% is primary; defense is additive:
+ *   • svQuality: (sv% − league_floor) × scale → saves above replacement
+ *   • dQuality: D-pair PPG (smart Ds maintain possession/suppress shots) +
+ *               D-pair BLK/G (literally blocks shots before they reach the goalie)
+ *   • fwdBlocks: forwards blocking shots (all five skaters contribute)
+ *   • oppPP: high PIM/G gifts the opponent power-play chances → more xGA
+ *
+ * DETERMINISM: the Poisson RNG is seeded from a hash of your exact roster.
+ * Same lineup → same record every time. Built for sharing and arguing.
+ *
+ * OFF-SIDE PENALTY: playing a skater on the wrong side for their shot hand reduces
+ * their effectiveness. The discount scales with the player's quality — elite
+ * players adapt more easily, so the penalty shrinks as PPG rises.
  */
 (function (g) {
-  // ---- tunables (calibrated against the real stat distribution) -------------
-  // The inputs are 100% real per-game stats; these constants only set the
-  // mapping from those stats to expected goals. They're anchored so the very
-  // best attainable roster can flirt with 82-0-0 (the hook), an average roster
-  // lands mid-pack, and a weak one sinks — while staying strictly monotonic in
-  // the real stats (better players always help).
-  const OFFSIDE_FACTOR = 0.82;   // a skater on their off-side is ~18% less effective
-  const ASSIST_WEIGHT  = 0.5;    // assists count half a goal toward "scoring involvement"
-  // xGF = OFF_INT + OFF_SLOPE * (top-5 scoring involvement)
-  const OFF_INT = -0.10, OFF_SLOPE = 1.0;
-  // defMetric = (save% - SV_BASE) * SV_GAIN + (defense-pair quality)
-  // xGA = GA_INT - GA_SLOPE * defMetric
-  const SV_BASE = 0.86, SV_GAIN = 22, GA_INT = 4.73, GA_SLOPE = 1.196;
-  const SV_MIN = 0.860, SV_MAX = 0.940; // clamp goalie save% to a sane band
-  const XGF_MIN = 1.0, XGA_MIN = 0.30;
+
+  // ── calibrated constants ──────────────────────────────────────────────────
+  // Offense
+  const IDEAL_APG_RATIO = 1.80;  // NHL norm: assists outnumber goals 1.8:1
+  const SPG_TEAM_AVG = 13.0;     // 5 skaters × ~2.6 shots/game = league baseline
+  const HPG_COEFF = 0.012;       // physical play bonus per HIT/G unit
+  const PIM_OFF_COEFF = 0.024;   // each PIM/G unit costs offensive output
+  const PLAYMAKING_MIN = 0.78;   // floor: even the worst all-sniper team isn't useless
+
+  // Defense
+  const SV_BASELINE = 0.860;     // league-floor save% (replacement-level goalie)
+  const SV_SCALE = 21.0;         // (sv% − baseline) × scale = sv quality index
+  const D_PPG_COEFF = 0.50;      // D-pair PPG contribution to defense quality
+  const D_BPG_COEFF = 0.30;      // D-pair BLK/G contribution to defense quality
+  const FWD_BPG_COEFF = 0.09;    // forward BLK/G (smaller but real)
+  const PIM_OPP_COEFF = 0.056;   // each PIM/G unit adds xGA via opponent PP
+  const GA_BASE = 4.95;          // xGA for a team with no defensive value
+  const GA_SLOPE = 1.24;         // how steeply elite defense suppresses goals
+
+  const SV_MIN = 0.860, SV_MAX = 0.940;
+  const XGF_MIN = 0.80, XGA_MIN = 0.25;
 
   const isGoalie = (p) => typeof p.svpct === 'number';
 
-  // side is the slot's side ('L'/'R'); a skater is off-side when their shot hand
-  // doesn't match (exported so the UI can compute placement penalties too).
+  // Off-side penalty scales DOWN for elite players.
+  // A 99th-percentile scorer (PPG ≥ 1.50) pays almost nothing;
+  // a below-average player (PPG ≤ 0.40) pays the full ~18%.
+  // Formula: MAX_DISCOUNT × (1 − clamp(ppg/PPG_ELITE, 0, 1) × ELITE_FORGIVE)
+  const OFFSIDE_MAX = 0.18;
+  const PPG_ELITE = 1.50;
+  const ELITE_FORGIVE = 0.80;  // elite players recover up to 80% of the penalty
+
   function offsidePenalty(hand, side) {
     if (!side || hand === 'B' || !hand) return false;
     return hand !== side;
   }
 
-  // Defensive quality of a defenseman from box-score proxies: all-around value
-  // (points/game) plus shot-blocking, both signs of a good two-way D.
-  const dQuality = (p) => 0.55 * (p.ppg || 0) + 0.16 * (p.bpg || 0);
+  function offsideDiscount(p) {
+    // fraction by which this player's stats are multiplied when on the off-side
+    const ppg = (p.gpg || 0) + (p.apg || 0);
+    const eliteness = Math.min(1, ppg / PPG_ELITE);
+    const discount = OFFSIDE_MAX * (1 - eliteness * ELITE_FORGIVE);
+    return 1 - discount;
+  }
+
+  function eff(p, stat) {
+    const v = p[stat] || 0;
+    if (!p.offside) return v;
+    return v * offsideDiscount(p);
+  }
 
   function expectedGoals(lineup) {
     const skaters = lineup.filter((p) => !isGoalie(p));
-    const goalie = lineup.find(isGoalie) || { svpct: 0.88 };
-    const D = skaters.filter((p) => (p.slotSide ? p.slot === 'LD' || p.slot === 'RD' : p.pos === 'D'));
+    const goalie  = lineup.find(isGoalie) || { svpct: 0.88 };
+    const dPair   = skaters.filter((p) => p.pos === 'D');
+    const fwds    = skaters.filter((p) => p.pos !== 'D');
 
-    // Offense: top-5 scoring involvement -> expected goals for.
-    let sOff = 0;
+    // ── Offense ──────────────────────────────────────────────────────────────
+    let totalGPG = 0, totalAPG = 0, totalSPG = 0, totalHPG = 0, totalPIMG = 0;
+    let rawScoring = 0;
+
     for (const p of skaters) {
-      const rate = (p.gpg || 0) + ASSIST_WEIGHT * (p.apg || 0);
-      sOff += p.offside ? rate * OFFSIDE_FACTOR : rate;
+      const gpg = eff(p, 'gpg');
+      const apg = eff(p, 'apg');
+      totalGPG  += gpg;
+      totalAPG  += apg;
+      totalSPG  += eff(p, 'spg');
+      totalHPG  += eff(p, 'hpg');
+      totalPIMG += p.pimpg || 0;     // PIM happens regardless of side
+      rawScoring += gpg + 0.5 * apg; // scoring involvement (Goals Created style)
     }
-    const xGF = Math.max(XGF_MIN, OFF_INT + OFF_SLOPE * sOff);
 
-    // Defense: goalie save% plus the defense pair's two-way quality.
-    let dDef = 0;
-    for (const p of D) dDef += p.offside ? dQuality(p) * OFFSIDE_FACTOR : dQuality(p);
+    // Playmaking balance: the ratio of team APG to GPG vs. the NHL norm.
+    // Too low → isolated snipers who can't set each other up.
+    // Too high → playmakers with nobody to finish (soft cap, not as penalized).
+    const assistRatio = totalAPG / Math.max(0.5, totalGPG);
+    const playmakingFactor = Math.min(1.02,
+      Math.max(PLAYMAKING_MIN, assistRatio / IDEAL_APG_RATIO));
+
+    // Shot volume: more shots on net (Corsi For) = more scoring opportunities.
+    const shotFactor = 0.88 + Math.min(0.17, (totalSPG / SPG_TEAM_AVG) * 0.17);
+
+    // Physical play → puck battles won → possession → cleaner scoring chances.
+    const physBonus = totalHPG * HPG_COEFF;
+
+    // Penalty discipline: PIM creates short-handed situations.
+    const penaltyCost = totalPIMG * PIM_OFF_COEFF;
+
+    const xGF = Math.max(XGF_MIN,
+      rawScoring * playmakingFactor * shotFactor + physBonus - penaltyCost);
+
+    // ── Defense ──────────────────────────────────────────────────────────────
     const sv = Math.min(SV_MAX, Math.max(SV_MIN, goalie.svpct || 0.88));
-    const defMetric = (sv - SV_BASE) * SV_GAIN + dDef;
-    const xGA = Math.max(XGA_MIN, GA_INT - GA_SLOPE * defMetric);
 
-    // 0-100 summary ratings for the result screen.
-    const attack = Math.round(Math.max(0, Math.min(100, (sOff - 1.8) / (5.8 - 1.8) * 100)));
-    const defense = Math.round(Math.max(0, Math.min(100, (4.2 - xGA) / (4.2 - 0.4) * 100)));
+    // Goalie quality above replacement.
+    const svQuality = (sv - SV_BASELINE) * SV_SCALE;
 
-    return { xGF, xGA, attack, defense, sOff, dDef, sv };
+    // D-pair quality: elite offensive D (Orr, Coffey, Makar) maintain possession
+    // in the defensive zone and their BLK/G physically reduces shots on net.
+    const dPPG = dPair.reduce((s, p) => s + eff(p, 'gpg') + eff(p, 'apg'), 0);
+    const dBPG = dPair.reduce((s, p) => s + eff(p, 'bpg'), 0);
+    const dQuality = D_PPG_COEFF * dPPG + D_BPG_COEFF * dBPG;
+
+    // Forwards blocking shots — small but real contribution.
+    const fwdBPG = fwds.reduce((s, p) => s + eff(p, 'bpg'), 0);
+    const fwdBlock = fwdBPG * FWD_BPG_COEFF;
+
+    // Opponent power play from our penalties.
+    const oppPP = totalPIMG * PIM_OPP_COEFF;
+
+    const defMetric = svQuality + dQuality + fwdBlock - oppPP;
+    const xGA = Math.max(XGA_MIN, GA_BASE - GA_SLOPE * defMetric);
+
+    // 0–100 summary ratings for the result card.
+    const attack  = Math.round(Math.max(0, Math.min(100, (rawScoring - 1.8) / (5.6 - 1.8) * 100)));
+    const defense = Math.round(Math.max(0, Math.min(100, (4.5 - xGA) / (4.5 - 0.3) * 100)));
+
+    return {
+      xGF, xGA, attack, defense,
+      totalGPG, totalAPG, totalSPG,
+      playmakingFactor, sv, defMetric,
+    };
   }
 
-  // Deterministic 32-bit seed from the exact roster (ids + key rates).
+  // ── RNG / simulation ──────────────────────────────────────────────────────
+
   function seedFrom(lineup) {
-    const s = lineup.map((p) => `${p.id}:${p.gpg ?? p.svpct}:${p.offside ? 1 : 0}`).join('|');
+    const s = lineup.map((p) =>
+      `${p.id}:${+(p.gpg ?? 0).toFixed(4)}:${+(p.apg ?? 0).toFixed(4)}:${+(p.svpct ?? 0).toFixed(4)}:${p.offside ? 1 : 0}`
+    ).join('|');
     let h = 2166136261 >>> 0;
     for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
     return h >>> 0;
@@ -89,10 +179,11 @@
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
   }
+
   function poisson(lambda, rng) {
     const L = Math.exp(-lambda);
-    let k = 0, prod = 1;
-    do { k++; prod *= rng(); } while (prod > L);
+    let k = 0, p = 1;
+    do { k++; p *= rng(); } while (p > L);
     return k - 1;
   }
 
@@ -112,5 +203,8 @@
     };
   }
 
-  g.NHL_SIM = { simulateSeason, expectedGoals, seedFrom, offsidePenalty, OFFSIDE_FACTOR };
+  g.NHL_SIM = {
+    simulateSeason, expectedGoals, seedFrom,
+    offsidePenalty, offsideDiscount,
+  };
 })(typeof window !== 'undefined' ? window : globalThis);

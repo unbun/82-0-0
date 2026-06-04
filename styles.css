@@ -140,6 +140,18 @@ h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: 1.5px; color
 .offtag { font-size: 0.6rem; font-weight: 800; color: var(--bad); margin-left: 0.4rem; letter-spacing: 0.5px; }
 @media (max-width: 560px) { .stats { gap: 0.2rem 0.4rem; } .st { font-size: 0.66rem; } .pinfo { min-width: 0; } }
 
+/* Slot chooser — shown when a player can fill multiple open slots */
+#slot-chooser { padding-top: 0.5rem; }
+.sc-buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }
+.sc-btn {
+  background: var(--bg2); border: 1px solid var(--line); color: var(--text);
+  border-radius: 10px; padding: 0.55rem 1rem; font: inherit; cursor: pointer;
+  transition: border-color 0.15s, transform 0.1s;
+}
+.sc-btn:hover { border-color: var(--accent); transform: translateY(-1px); }
+.sc-btn.off { border-style: dashed; }
+.sc-btn strong { display: block; font-size: 1rem; }
+
 /* Buttons */
 button { cursor: pointer; }
 .primary {
