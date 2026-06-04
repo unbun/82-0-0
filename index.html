@@ -21,7 +21,7 @@
     <section id="roster" aria-label="Your lineup">
       <h2>Your Lineup <span id="roster-count" class="muted"></span></h2>
       <div id="slots" class="slots"></div>
-      <p class="hint">Six fixed slots: <strong>3 forwards, 2 defensemen, 1 goalie</strong>. Each pick locks its slot — no swapping it later without starting over.</p>
+      <p class="hint">The real six: <strong>C · LW · RW · LD · RD · G</strong>. Each pick locks its slot — no swapping later without starting over. Mind the shot hand: a winger or D on their off-side gets penalized.</p>
     </section>
 
     <!-- The roll / draft panel -->
@@ -33,14 +33,13 @@
 
       <div id="pick-panel" class="panel hidden">
         <div class="roll-head">
-          <span id="roll-team" class="roll-team"></span>
-          <span id="roll-decade" class="roll-decade"></span>
+          <span class="roll-chip"><span class="roll-cap">Franchise</span><span id="roll-team" class="roll-team"></span>
+            <button id="reroll-team" class="reroll-mini" title="Reroll the franchise">🔄</button></span>
+          <span class="roll-chip"><span class="roll-cap">Decade</span><span id="roll-decade" class="roll-decade"></span>
+            <button id="reroll-decade" class="reroll-mini" title="Reroll the decade">🔄</button></span>
         </div>
-        <p class="muted small" id="roll-sub">Pick one player to draft. Greyed-out positions are already filled.</p>
+        <p class="muted small"><span id="reroll-note"></span> · pick one player below to lock it in. Greyed rows can't fill an open slot.</p>
         <div id="players" class="players"></div>
-        <div class="center" style="margin-top:0.9rem;">
-          <button id="reroll-btn" class="ghost">🔄 Reroll team &amp; players (1 left)</button>
-        </div>
       </div>
     </section>
 
@@ -63,14 +62,14 @@
     <details id="how">
       <summary>How the simulation works</summary>
       <div class="how-body">
-        <p>Skaters and goalies are rated on <strong>different axes</strong>: a skater's rating is offense/skill (it drives goals you <em>score</em>); a goalie's rating is goaltending (it drives goals you <em>allow</em>). Defensemen help on both ends; forwards chip in a little on defense.</p>
-        <p>Your six picks collapse into two team ratings (0–99):</p>
-        <pre>attack  = 0.75·avgForward + 0.25·avgDefense
-defense = 0.62·goalie + 0.26·avgDefense + 0.12·avgForward</pre>
-        <p>Those map to expected goals per game:</p>
-        <pre>xGF = -7.31 + attack  × 0.1304   (attack 76 → 2.6, 99 → 5.6)
-xGA = 14.51 - defense × 0.1475   (defense 76 → 3.3, 96 → 0.3)</pre>
-        <p>Then 82 games are simulated: each game draws <code>goalsFor ~ Poisson(xGF)</code> and <code>goalsAgainst ~ Poisson(xGA)</code>. More goals = win, fewer = loss, equal = tie. The random draws are <strong>seeded from your exact roster</strong>, so the same lineup always returns the same record — perfect for bragging. Going 82-0-0 needs an elite, balanced lineup <em>and</em> a little variance luck.</p>
+        <p>Every number comes from <strong>real NHL stats</strong> (pulled from the league's official API). Players are bucketed by franchise and decade; skaters are ranked by points/game, goalies by games played. Stats the NHL didn't track in older eras (shots before 1959, hits/blocks before 2005, goalie save% before ~1955) are imputed by tier and marked with a <code>~</code>, so old eras aren't unfairly helped or hurt.</p>
+        <p>Your lineup turns those stats into expected goals per game:</p>
+        <pre>scoring = Σ over your 5 skaters of (goals/game + ½·assists/game)
+xGF     = -0.10 + 1.0 · scoring                 (goals you score)
+
+defense = (goalie save% - .86)·22 + D-pair quality
+xGA     = 4.73 - 1.20 · defense                 (goals you allow)</pre>
+        <p>A skater played on the wrong side for their shot hand (off-side) is discounted ~18%. Then 82 games are simulated: each draws <code>goalsFor ~ Poisson(xGF)</code> and <code>goalsAgainst ~ Poisson(xGA)</code> — more goals win, fewer lose, equal ties. The draws are <strong>seeded from your exact roster</strong>, so the same lineup <em>always</em> returns the same record. Going 82-0-0 takes a near-perfect, balanced roster with an elite goalie.</p>
       </div>
     </details>
   </main>

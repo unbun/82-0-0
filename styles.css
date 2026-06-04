@@ -87,7 +87,8 @@ h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: 1.5px; color
 
 /* Position pills */
 .pos { display: inline-block; font-size: 0.62rem; font-weight: 800; padding: 0.05rem 0.4rem; border-radius: 999px; letter-spacing: 1px; vertical-align: middle; }
-.pos.F { background: rgba(78,161,255,0.18); color: var(--f); }
+.pos.C { background: rgba(78,161,255,0.18); color: var(--f); }
+.pos.W { background: rgba(78,161,255,0.14); color: var(--f); }
 .pos.D { background: rgba(176,124,255,0.18); color: var(--d); }
 .pos.G { background: rgba(255,207,92,0.18); color: var(--g); }
 
@@ -100,32 +101,44 @@ h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: 1.5px; color
   margin-top: 1rem;
 }
 
-/* Roll header */
-.roll-head { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.2rem; }
-.roll-team { font-size: 1.5rem; font-weight: 800; }
-.roll-decade { font-size: 1.1rem; color: var(--gold); font-weight: 700; }
-
-/* Player choices */
-.players { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.7rem; }
-@media (max-width: 540px) { .players { grid-template-columns: 1fr; } }
-.player {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 0.5rem;
-  background: var(--bg2);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 0.6rem 0.75rem;
-  cursor: pointer;
-  text-align: left;
-  color: var(--text);
-  font: inherit;
-  transition: border-color 0.15s, transform 0.1s, background 0.15s;
+/* Roll header — two chips (franchise + decade), each with a mini reroll */
+.roll-head { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.roll-chip {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  background: var(--bg2); border: 1px solid var(--line); border-radius: 12px;
+  padding: 0.5rem 0.75rem;
 }
-.player:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-1px); }
-.player:disabled { opacity: 0.4; cursor: not-allowed; }
+.roll-cap { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); }
+.roll-team { font-size: 1.25rem; font-weight: 800; }
+.roll-decade { font-size: 1.25rem; color: var(--gold); font-weight: 800; }
+.reroll-mini {
+  background: transparent; border: 1px solid var(--line); color: var(--muted);
+  border-radius: 8px; padding: 0.15rem 0.4rem; font-size: 0.85rem; line-height: 1;
+}
+.reroll-mini:hover:not(:disabled) { border-color: var(--accent2); color: var(--text); }
+.reroll-mini:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* Scrollable player list with per-game stats */
+.players { margin-top: 0.6rem; max-height: 56vh; overflow-y: auto; display: flex; flex-direction: column; gap: 0.35rem; padding-right: 0.2rem; }
+.plist-head { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin: 0.5rem 0 0.1rem; position: sticky; top: 0; background: var(--panel); padding: 0.2rem 0; }
+.player {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
+  background: var(--bg2); border: 1px solid var(--line); border-radius: 10px;
+  padding: 0.5rem 0.7rem; cursor: pointer; text-align: left; color: var(--text);
+  font: inherit; transition: border-color 0.15s, transform 0.1s;
+}
+.player:hover:not(:disabled) { border-color: var(--accent); transform: translateX(2px); }
+.player:disabled { opacity: 0.38; cursor: not-allowed; }
+.player.off { border-style: dashed; }
+.pinfo { display: flex; align-items: center; gap: 0.45rem; min-width: 38%; }
 .player .pname { font-weight: 700; }
-.player .pright { display: flex; align-items: center; gap: 0.5rem; }
-.player .ovr { font-weight: 800; font-variant-numeric: tabular-nums; color: var(--accent); }
+.player .hand { font-size: 0.6rem; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 0.25rem; }
+.stats { display: flex; flex-wrap: wrap; gap: 0.3rem 0.55rem; justify-content: flex-end; }
+.st { font-size: 0.72rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.st b { color: var(--text); font-weight: 700; }
+.st i { color: var(--gold); font-style: normal; }
+.offtag { font-size: 0.6rem; font-weight: 800; color: var(--bad); margin-left: 0.4rem; letter-spacing: 0.5px; }
+@media (max-width: 560px) { .stats { gap: 0.2rem 0.4rem; } .st { font-size: 0.66rem; } .pinfo { min-width: 0; } }
 
 /* Buttons */
 button { cursor: pointer; }
@@ -153,6 +166,7 @@ button { cursor: pointer; }
 
 /* Result */
 .record { text-align: center; font-size: clamp(3rem, 14vw, 5.5rem); font-weight: 900; letter-spacing: 2px; line-height: 1; }
+.record .d { color: var(--muted); }
 .record.perfect { color: var(--gold); text-shadow: 0 0 40px rgba(255,207,92,0.5); animation: pop 0.5s ease; }
 @keyframes pop { 0% { transform: scale(0.6); opacity: 0; } 60% { transform: scale(1.12); } 100% { transform: scale(1); opacity: 1; } }
 .verdict { text-align: center; font-size: 1.15rem; margin-top: 0.4rem; font-weight: 700; }

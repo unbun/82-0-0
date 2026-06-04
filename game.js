@@ -2,13 +2,11 @@
 (function () {
   const DATA = window.NHL_DATA;
   const SIM = window.NHL_SIM;
+  const TEAMS = DATA.teams;
 
-  // The real hockey six. Each skater fills its strict position; wings and
-  // defense have a left/right side, and playing a skater on their off-side
-  // costs a rating penalty (SIM.offsidePenalty). Each slot, once filled, is
-  // locked — you can't swap it without restarting.
-  //   cat: which players may fill it ('C' | 'W' | 'D' | 'G')
-  //   side: 'L' | 'R' for wing/defense slots (undefined for C/G)
+  // The real hockey six. cat = which players may fill it; side = L/R for
+  // wing/defense slots (used for the shot-hand off-side penalty). Each slot,
+  // once filled, is LOCKED — no swapping without restarting.
   const SLOTS = [
     { label: 'Center',        code: 'C',  cat: 'C' },
     { label: 'Left Wing',     code: 'LW', cat: 'W', side: 'L' },
@@ -17,52 +15,135 @@
     { label: 'Right Defense', code: 'RD', cat: 'D', side: 'R' },
     { label: 'Goalie',        code: 'G',  cat: 'G' },
   ];
-  const REROLLS_PER_GAME = 1; // one mulligan per playthrough
+  const REROLLS_PER_ROSTER = 1; // one reroll (of team OR decade) for the whole draft
 
-  // Pre-build the list of valid (team, decade) rolls — buckets with players.
-  const ROLLS = [];
-  for (const team of DATA.teams) {
-    for (const decade of Object.keys(team.eras)) {
-      if (team.eras[decade] && team.eras[decade].length) ROLLS.push({ team, decade });
-    }
-  }
+  const POS_LABEL = { C: 'C', L: 'LW', R: 'RW', D: 'D' };
+  const catOf = (p) => (p.isGoalie ? 'G' : p.pos === 'C' ? 'C' : p.pos === 'D' ? 'D' : 'W');
 
   // State
   let roster = new Array(SLOTS.length).fill(null);
-  let drafted = new Set();
-  let rerollsLeft = REROLLS_PER_GAME;
-  let currentRoll = null;
+  let drafted = new Set();           // player ids already taken
+  let rerollLeft = REROLLS_PER_ROSTER;
+  let curTeam = null, curDecade = null;
 
-  // Elements
   const $ = (id) => document.getElementById(id);
-  const slotsEl = $('slots');
-  const rosterCountEl = $('roster-count');
-  const rollPanel = $('roll-panel');
-  const pickPanel = $('pick-panel');
-  const rollBtn = $('roll-btn');
-  const rerollBtn = $('reroll-btn');
-  const rollTeamEl = $('roll-team');
-  const rollDecadeEl = $('roll-decade');
-  const playersEl = $('players');
-  const simBtn = $('sim-btn');
-  const resultEl = $('result');
-
-  const pkey = (p) => `${p.n}|${p.p}|${p.o}`;
   const rnd = (arr) => arr[Math.floor(Math.random() * arr.length)];
-  const posLabel = (p) => (p.p === 'C' ? 'C' : p.p === 'G' ? 'G' : `${p.p}${p.h ? ' ' + p.h : ''}`);
 
-  // Candidate (still-open) slots a player could fill, best (lowest penalty) first.
-  function candidateSlots(p) {
-    return SLOTS
-      .map((s, i) => ({ s, i }))
-      .filter((x) => x.s.cat === p.p && !roster[x.i])
-      .sort((a, b) => SIM.offsidePenalty(p.h, a.s.side) - SIM.offsidePenalty(p.h, b.s.side));
+  // ---- pool access ---------------------------------------------------------
+  // Players (skaters + goalies) for a team+decade, normalized.
+  function poolFor(team, decade) {
+    const era = team.eras[decade];
+    if (!era) return [];
+    const sk = era.skaters.map((p) => ({ ...p }));
+    const go = era.goalies.map((p) => ({ ...p, isGoalie: true }));
+    return [...sk, ...go];
   }
-  const isPickable = (p) => !drafted.has(pkey(p)) && candidateSlots(p).length > 0;
+  const decadesFor = (team) => DATA.decades.filter((d) => team.eras[d]);
+
+  const firstOpenSlotIdx = (cat) => SLOTS.findIndex((s, i) => s.cat === cat && !roster[i]);
   const filledCount = () => roster.filter(Boolean).length;
 
+  function candidateSlots(p) {
+    const cat = catOf(p);
+    return SLOTS
+      .map((s, i) => ({ s, i }))
+      .filter((x) => x.s.cat === cat && !roster[x.i])
+      .sort((a, b) => (SIM.offsidePenalty(p.hand, a.s.side) - SIM.offsidePenalty(p.hand, b.s.side)));
+  }
+  const isPickable = (p) => !drafted.has(p.id) && candidateSlots(p).length > 0;
+  const bucketHasPick = (team, decade) => poolFor(team, decade).some(isPickable);
+
+  // ---- rolling -------------------------------------------------------------
+  function rollFresh() {
+    let team, decade, guard = 0;
+    do {
+      team = rnd(TEAMS);
+      const ds = decadesFor(team);
+      decade = rnd(ds);
+      guard++;
+    } while (!bucketHasPick(team, decade) && guard < 800);
+    curTeam = team; curDecade = decade;
+    showPick();
+  }
+  function rerollTeam() {
+    if (rerollLeft <= 0) return;
+    const opts = TEAMS.filter((t) => t !== curTeam && t.eras[curDecade] && bucketHasPick(t, curDecade));
+    if (!opts.length) return;
+    rerollLeft--; curTeam = rnd(opts); showPick();
+  }
+  function rerollDecade() {
+    if (rerollLeft <= 0) return;
+    const opts = decadesFor(curTeam).filter((d) => d !== curDecade && bucketHasPick(curTeam, d));
+    if (!opts.length) return;
+    rerollLeft--; curDecade = rnd(opts); showPick();
+  }
+
+  // ---- rendering -----------------------------------------------------------
+  function statBadges(p) {
+    if (p.isGoalie) {
+      const sv = (p.svpct * 100).toFixed(1);
+      return `<span class="st">SV% <b>${sv}</b>${p.imp.svpct ? '<i title="imputed for this era">~</i>' : ''}</span>` +
+             `<span class="st">GAA <b>${p.gaa.toFixed(2)}</b></span>` +
+             `<span class="st">GP <b>${p.gp}</b></span>`;
+    }
+    const im = p.imp || {};
+    return `<span class="st">G/g <b>${p.gpg.toFixed(2)}</b></span>` +
+           `<span class="st">A/g <b>${p.apg.toFixed(2)}</b></span>` +
+           `<span class="st">Sh/g <b>${p.spg.toFixed(1)}</b>${im.shots ? '<i title="imputed">~</i>' : ''}</span>` +
+           `<span class="st">PIM/g <b>${p.pimpg.toFixed(1)}</b></span>` +
+           `<span class="st">Hit/g <b>${p.hpg.toFixed(1)}</b>${im.hb ? '<i title="imputed">~</i>' : ''}</span>` +
+           `<span class="st">Blk/g <b>${p.bpg.toFixed(1)}</b>${im.hb ? '<i title="imputed">~</i>' : ''}</span>`;
+  }
+
+  function showPick() {
+    $('roll-team').textContent = curTeam.name;
+    $('roll-decade').textContent = curDecade;
+
+    const pool = poolFor(curTeam, curDecade);
+    const skaters = pool.filter((p) => !p.isGoalie);     // already sorted by ppg
+    const goalies = pool.filter((p) => p.isGoalie);      // already sorted by gp
+    const list = $('players');
+    list.innerHTML = '';
+
+    const addGroup = (title, arr) => {
+      if (!arr.length) return;
+      const h = document.createElement('div'); h.className = 'plist-head'; h.textContent = title;
+      list.appendChild(h);
+      for (const p of arr) {
+        const pickable = isPickable(p);
+        const best = candidateSlots(p)[0];
+        const wouldOffside = pickable && best && SIM.offsidePenalty(p.hand, best.s.side);
+        const row = document.createElement('button');
+        row.className = 'player' + (wouldOffside ? ' off' : '');
+        row.disabled = !pickable;
+        const tag = p.isGoalie ? 'G' : POS_LABEL[p.pos];
+        const hand = p.isGoalie ? '' : ` <span class="hand">${p.hand}</span>`;
+        const off = wouldOffside ? `<span class="offtag">off-side −${Math.round((1 - SIM.OFFSIDE_FACTOR) * 100)}%</span>` : '';
+        row.innerHTML =
+          `<span class="pinfo"><span class="pos ${catOf(p)}">${tag}</span>${hand}` +
+          `<span class="pname">${p.n}${off}</span></span>` +
+          `<span class="stats">${statBadges(p)}</span>`;
+        row.addEventListener('click', () => draftPlayer(p));
+        list.appendChild(row);
+      }
+    };
+    addGroup(`Skaters — by points/game`, skaters);
+    addGroup(`Goalies — by games played`, goalies);
+
+    // reroll buttons
+    const can = rerollLeft > 0;
+    $('reroll-team').disabled = !can;
+    $('reroll-decade').disabled = !can;
+    $('reroll-note').textContent = can
+      ? `1 reroll left — re-spin the team or the decade`
+      : `no rerolls left`;
+
+    $('roll-panel').classList.add('hidden');
+    $('pick-panel').classList.remove('hidden');
+  }
+
   function renderSlots(justFilledIdx = -1) {
-    slotsEl.innerHTML = '';
+    const el = $('slots'); el.innerHTML = '';
     SLOTS.forEach((slot, i) => {
       const div = document.createElement('div');
       div.className = 'slot';
@@ -70,108 +151,44 @@
       if (p) {
         div.classList.add('filled');
         if (i === justFilledIdx) div.classList.add('just-filled');
-        const off = p.offside ? ` <span class="offtag">off-side −${SIM.OFFSIDE_PENALTY}</span>` : '';
+        const off = p.offside ? ` <span class="offtag">off-side</span>` : '';
+        const key = p.isGoalie ? `SV% ${(p.svpct * 100).toFixed(1)}` : `${(p.gpg + p.apg).toFixed(2)} P/g`;
         div.innerHTML =
-          `<span class="slot-label">${slot.label} · <span class="pos ${p.p}">${posLabel(p)}</span></span>` +
+          `<span class="slot-label">${slot.label}</span>` +
           `<span class="slot-name">${p.n}${off}</span>` +
-          `<span class="slot-meta">${p.team} · ${p.decade} · OVR ${p.base}${p.offside ? ` → ${p.o}` : ''}</span>`;
+          `<span class="slot-meta">${p.teamName} · ${p.decade} · ${key}</span>`;
       } else {
         div.innerHTML = `<span class="slot-label">${slot.label}</span><span class="empty-tip">—</span>`;
       }
-      slotsEl.appendChild(div);
+      el.appendChild(div);
     });
-    rosterCountEl.textContent = `(${filledCount()}/${SLOTS.length})`;
-  }
-
-  // Pick a random bucket that has at least one pickable player. Dead buckets
-  // (nothing matches an open slot) are skipped for free — they never appear and
-  // don't burn your reroll.
-  function pickValidRoll() {
-    let roll, guard = 0;
-    do {
-      roll = rnd(ROLLS);
-      guard++;
-    } while (!roll.team.eras[roll.decade].some(isPickable) && guard < 500);
-    return roll;
-  }
-
-  function renderReroll() {
-    if (rerollsLeft > 0) {
-      rerollBtn.disabled = false;
-      rerollBtn.textContent = `🔄 Reroll team & players (${rerollsLeft} left)`;
-    } else {
-      rerollBtn.disabled = true;
-      rerollBtn.textContent = '🔄 No rerolls left';
-    }
-  }
-
-  function showRoll(roll) {
-    currentRoll = roll;
-    rollTeamEl.textContent = roll.team.name;
-    rollDecadeEl.textContent = roll.decade;
-
-    playersEl.innerHTML = '';
-    const sorted = roll.team.eras[roll.decade].slice().sort((a, b) => b.o - a.o);
-    for (const p of sorted) {
-      const pickable = isPickable(p);
-      const best = candidateSlots(p)[0];
-      const wouldOffside = pickable && best && SIM.offsidePenalty(p.h, best.s.side) > 0;
-      const btn = document.createElement('button');
-      btn.className = 'player';
-      btn.disabled = !pickable;
-      const warn = wouldOffside ? ` <span class="offtag">off-side −${SIM.OFFSIDE_PENALTY}</span>` : '';
-      btn.innerHTML =
-        `<span class="pname">${p.n}${warn}</span>` +
-        `<span class="pright"><span class="pos ${p.p}">${posLabel(p)}</span><span class="ovr">${p.o}</span></span>`;
-      btn.addEventListener('click', () => draftPlayer(p));
-      playersEl.appendChild(btn);
-    }
-
-    renderReroll();
-    rollPanel.classList.add('hidden');
-    pickPanel.classList.remove('hidden');
-  }
-
-  function newRoll() { showRoll(pickValidRoll()); }
-
-  function reroll() {
-    if (rerollsLeft <= 0) return;
-    rerollsLeft--;
-    showRoll(pickValidRoll());
+    $('roster-count').textContent = `(${filledCount()}/${SLOTS.length})`;
   }
 
   function draftPlayer(p) {
     const best = candidateSlots(p)[0];
     if (!best) return;
-    const penalty = SIM.offsidePenalty(p.h, best.s.side);
-    roster[best.i] = {
-      ...p,
-      team: currentRoll.team.name,
-      decade: currentRoll.decade,
-      slot: best.s.code,
-      side: best.s.side,
-      base: p.o,
-      o: p.o - penalty,   // effective rating the sim sees
-      offside: penalty > 0,
-    };
-    drafted.add(pkey(p));
+    const offside = !!SIM.offsidePenalty(p.hand, best.s.side);
+    roster[best.i] = { ...p, slot: best.s.code, slotSide: best.s.side, offside, teamName: curTeam.name, decade: curDecade };
+    drafted.add(p.id);
     renderSlots(best.i);
-    pickPanel.classList.add('hidden');
+    $('pick-panel').classList.add('hidden');
 
     if (filledCount() >= SLOTS.length) {
-      simBtn.classList.remove('hidden');
-      simBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      $('sim-btn').classList.remove('hidden');
+      $('sim-btn').scrollIntoView({ behavior: 'smooth', block: 'center' });
     } else {
-      rollBtn.textContent = `🎲 Roll pick ${filledCount() + 1} of ${SLOTS.length}`;
-      rollPanel.classList.remove('hidden');
+      $('roll-btn').textContent = `🎲 Roll pick ${filledCount() + 1} of ${SLOTS.length}`;
+      $('roll-panel').classList.remove('hidden');
     }
   }
 
+  // ---- result --------------------------------------------------------------
   function verdictFor(r) {
-    if (r.w === 82 && r.l === 0 && r.t === 0) return { text: '🏆 PERFECT! 82-0-0. The greatest team in hockey history.', perfect: true };
+    if (r.w === 82 && r.l === 0 && r.t === 0) return { text: '🏆 PERFECT! 82-0-0. The greatest team ever assembled.', perfect: true };
     if (r.l === 0) return { text: `Unbeaten! But ${r.t} tie${r.t === 1 ? '' : 's'} kept you from immortality.`, perfect: false };
     if (r.points >= 150) return { text: 'A juggernaut — but not quite perfect.', perfect: false };
-    if (r.points >= 120) return { text: 'A serious Cup contender.', perfect: false };
+    if (r.points >= 115) return { text: 'A serious Cup contender.', perfect: false };
     if (r.points >= 95) return { text: 'A solid playoff team.', perfect: false };
     if (r.points >= 75) return { text: 'Bubble team — might sneak into the playoffs.', perfect: false };
     return { text: 'Rough season. Back to the drawing board.', perfect: false };
@@ -180,31 +197,27 @@
   function simulate() {
     const r = SIM.simulateSeason(roster);
     const v = verdictFor(r);
-
-    $('record').innerHTML = `${r.w}<span style="color:var(--muted)">-</span>${r.l}<span style="color:var(--muted)">-</span>${r.t}`;
+    $('record').innerHTML = `${r.w}<span class="d">-</span>${r.l}<span class="d">-</span>${r.t}`;
     $('record').className = 'record' + (v.perfect ? ' perfect' : '');
     $('verdict').innerHTML = `${v.text} <span class="pts">(${r.points} pts)</span>`;
-
     $('result-roster').innerHTML = SLOTS.map((slot, i) => {
       const p = roster[i];
       const off = p.offside ? ' <span class="offtag">off-side</span>' : '';
-      return `<span class="chip"><span class="pos ${p.p}">${slot.code}</span> ${p.n}${off}</span>`;
+      return `<span class="chip"><span class="pos ${catOf(p)}">${slot.code}</span> ${p.n}${off}</span>`;
     }).join('');
-
     $('stat-line').innerHTML =
       `Attack <strong>${r.attack}</strong> · Defense <strong>${r.defense}</strong> — ` +
       `expected <strong>${r.xGF}</strong> goals for / <strong>${r.xGA}</strong> against per game`;
-
-    simBtn.classList.add('hidden');
-    resultEl.classList.remove('hidden');
-    resultEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    $('sim-btn').classList.add('hidden');
+    $('result').classList.remove('hidden');
+    $('result').scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
   function shareText() {
     const r = SIM.simulateSeason(roster);
     const lines = SLOTS.map((slot, i) => {
       const p = roster[i];
-      return `  ${slot.code.padEnd(2)} ${p.n} (${p.team} ${p.decade})${p.offside ? ' [off-side]' : ''}`;
+      return `  ${slot.code.padEnd(2)} ${p.n} (${p.teamName} ${p.decade})${p.offside ? ' [off-side]' : ''}`;
     }).join('\n');
     return `82-0-0 🏒  My all-time NHL lineup went ${r.w}-${r.l}-${r.t} (${r.points} pts)\n${lines}\nBuild yours!`;
   }
@@ -212,36 +225,35 @@
   function toast(msg) {
     let t = document.querySelector('.toast');
     if (!t) { t = document.createElement('div'); t.className = 'toast'; document.body.appendChild(t); }
-    t.textContent = msg;
-    t.classList.add('show');
+    t.textContent = msg; t.classList.add('show');
     setTimeout(() => t.classList.remove('show'), 1600);
   }
 
   function reset() {
     roster = new Array(SLOTS.length).fill(null);
     drafted = new Set();
-    rerollsLeft = REROLLS_PER_GAME;
-    currentRoll = null;
+    rerollLeft = REROLLS_PER_ROSTER;
+    curTeam = curDecade = null;
     renderSlots();
-    resultEl.classList.add('hidden');
-    simBtn.classList.add('hidden');
-    pickPanel.classList.add('hidden');
-    rollBtn.textContent = '🎲 Roll first pick';
-    rollPanel.classList.remove('hidden');
+    $('result').classList.add('hidden');
+    $('sim-btn').classList.add('hidden');
+    $('pick-panel').classList.add('hidden');
+    $('roll-btn').textContent = '🎲 Roll first pick';
+    $('roll-panel').classList.remove('hidden');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  // Wire up
-  rollBtn.addEventListener('click', newRoll);
-  rerollBtn.addEventListener('click', reroll);
-  simBtn.addEventListener('click', simulate);
+  // ---- wire up -------------------------------------------------------------
+  $('roll-btn').addEventListener('click', rollFresh);
+  $('reroll-team').addEventListener('click', rerollTeam);
+  $('reroll-decade').addEventListener('click', rerollDecade);
+  $('sim-btn').addEventListener('click', simulate);
   $('again-btn').addEventListener('click', reset);
   $('share-btn').addEventListener('click', async () => {
     const text = shareText();
     try {
       if (navigator.share) { await navigator.share({ text }); return; }
-      await navigator.clipboard.writeText(text);
-      toast('Copied to clipboard!');
+      await navigator.clipboard.writeText(text); toast('Copied to clipboard!');
     } catch (e) {
       try { await navigator.clipboard.writeText(text); toast('Copied!'); } catch (_) {}
     }

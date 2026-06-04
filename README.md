@@ -2,19 +2,24 @@
 
 An NHL twist on the viral [82-0](https://www.82-0.com/) basketball game.
 
-Roll a random **franchise + decade**, draft a legend into a locked roster slot, and
-build a 6-player all-time lineup — **3 forwards, 2 defensemen, 1 goalie**. Each pick
-fills its slot for good; you can't swap it without starting over. You get **one
-reroll per game** if you hate your options. Then a simulation crunches your roster
-into a **W-L-T** record over 82 games. Can you go **82-0-0** — 82 wins, 0 losses,
-0 ties (old-school NHL ties included)?
+Roll two things — a **franchise** and a **decade** — then draft from a scrollable
+list of that team-decade's real players (skaters ranked by points/game, goalies by
+games played), each shown with their actual per-game stats. Fill the real hockey
+six — **C, LW, RW, LD, RD, G** — one locked slot at a time; you can't swap a slot
+without starting over. You get **one reroll per roster**, of either the franchise
+or the decade. Then a stats-based simulation crunches your lineup into a **W-L-T**
+record over 82 games. Can you go **82-0-0** — 82 wins, 0 losses, 0 ties?
 
-- **From the NHL's creation (1917) to now (2026).**
+- **Every stat is real**, pulled once from the NHL's official API, from the
+  league's creation (1917) to today.
 - **Relocated/renamed franchises are folded into today's 32 teams.** The Quebec
   Nordiques live under the Colorado Avalanche; the Hartford Whalers under the
   Carolina Hurricanes; the original Winnipeg Jets / Phoenix / Arizona Coyotes
   under the Utah Mammoth; the Atlanta Thrashers under the current Winnipeg Jets;
-  the Minnesota North Stars under the Dallas Stars; and so on.
+  the Minnesota North Stars under the Dallas Stars; and the original (1917–1934)
+  Ottawa Senators under the modern Senators.
+- **Wrong-handed = penalized.** Wings and defense have a left/right side; playing a
+  skater on their off-side (their shot hand doesn't match) discounts them ~18%.
 - **No build step, no dependencies.** Pure HTML/CSS/JS — works on GitHub Pages or Vercel.
 
 ## Play locally
@@ -31,64 +36,70 @@ npx serve .
 
 ## Project layout
 
-| File         | What it does                                                            |
-|--------------|-------------------------------------------------------------------------|
-| `index.html` | Markup + script includes                                                |
-| `styles.css` | Styling                                                                 |
-| `data.js`    | The dataset: 32 current franchises → decades → curated legends          |
-| `sim.js`     | The season simulation engine (deterministic — same roster → same record)|
-| `game.js`    | Game loop / UI                                                          |
+| File                  | What it does                                                              |
+|-----------------------|--------------------------------------------------------------------------|
+| `index.html`          | Markup + script includes                                                 |
+| `styles.css`          | Styling                                                                  |
+| `data.js`             | **Generated** dataset: 32 franchises → decades → real players + stats     |
+| `sim.js`              | Stats-based season simulation (deterministic — same roster → same record) |
+| `game.js`             | Game loop / UI                                                           |
+| `etl/build-data.mjs`  | One-time pull from the NHL API that generates `data.js`                   |
+| `etl/calibrate.mjs`   | Samples real lineups to sanity-check / tune the sim                       |
 
-`sim.js` and `data.js` are written as UMD-style globals, so they also run under
-Node for testing:
+`data.js` is a committed build artifact, so the site needs no server or build
+step. To regenerate it from scratch:
 
 ```bash
-node -e 'require("./data.js");require("./sim.js");
-const D=NHL_DATA,S=NHL_SIM,f=n=>{for(const t of D.teams)for(const d in t.eras)for(const p of t.eras[d])if(p.n===n)return p};
-console.log(S.simulateSeason(["Wayne Gretzky","Mario Lemieux","Gordie Howe","Bobby Orr","Nicklas Lidstrom","Patrick Roy"].map(f)));'
+node etl/build-data.mjs      # pulls the NHL API (cached in etl/cache/), writes data.js
+node etl/calibrate.mjs       # prints the sim spread for an elite vs. random lineups
 ```
+
+## Where the data comes from
+
+Everything is pulled **once** from the league's official, public APIs — no scraping,
+no hand-entered ratings:
+
+- `api-web.nhle.com/v1/club-stats/{team}/{season}/2` — per-team-season skater &
+  goalie box scores, back to 1917–18.
+- `api.nhle.com/stats/rest/en/team` — maps each historical team code to a stable
+  `franchiseId`, which is how relocations get folded into today's clubs (plus two
+  manual merges the NHL counts separately: Coyotes-lineage → Utah, original
+  Senators → modern Ottawa).
+- `api.nhle.com/stats/rest/en/skater/realtime` — hits, blocks, and shot handedness
+  for the modern era.
+
+For each franchise/decade we keep the **top ~30 skaters by points/game** (with a
+minimum games-played threshold) and the **3–5 goalies with the most games**. Stats
+the NHL didn't track in a given era are **imputed by tier** so old decades aren't
+unfairly favored or penalized, and every imputed value is flagged with a `~`:
+
+- shots/game before 1959–60 (estimated from goals and era shooting %),
+- hits/blocks before 2005–06 (league medians by position and scoring tier),
+- goalie save % before ~1955 (derived from goals-against average).
 
 ## How the simulation works
 
-Skaters and goalies are rated on **different axes**: a skater's rating is
-offense/skill (it drives the goals you *score*); a goalie's rating is goaltending
-(it drives the goals you *allow*). Defensemen help on both ends; forwards chip in a
-little on defense.
-
-Your six picks collapse into two team ratings (0–99):
+Every input is a real per-game stat. Your lineup maps to expected goals per game:
 
 ```
-attack  = 0.75·avgForward + 0.25·avgDefense
-defense = 0.62·goalie + 0.26·avgDefense + 0.12·avgForward
+scoring = Σ over your 5 skaters of (goals/game + ½·assists/game)
+xGF     = -0.10 + 1.0 · scoring                 # goals you score
+
+defense = (goalie save% - .86)·22 + D-pair quality
+xGA     = 4.73 - 1.20 · defense                 # goals you allow
 ```
 
-Those map to expected goals per game (anchored on the dataset's real rating band,
-so good drafting actually separates the field):
+A skater on their off-side (shot hand ≠ slot side) is discounted ~18%. Then 82
+games are simulated, each drawing `goalsFor ~ Poisson(xGF)` and
+`goalsAgainst ~ Poisson(xGA)` — more goals win, fewer lose, equal ties.
 
-```
-xGF = -7.31 + attack  × 0.1304     // attack 76 → 2.6 GF,  99 → 5.6 GF
-xGA = 14.51 - defense × 0.1475     // defense 76 → 3.3 GA, 96 → 0.3 GA
-```
+Two things worth knowing:
 
-Then 82 games are simulated. Each game draws `goalsFor ~ Poisson(xGF)` and
-`goalsAgainst ~ Poisson(xGA)`; more goals = win, fewer = loss, equal = tie.
-
-Two design consequences worth knowing:
-
-- **Results are deterministic.** The random draws are seeded from your exact
-  roster, so the same lineup always returns the same record — built for bragging.
-- **82-0-0 is hard on purpose.** It needs an elite, balanced lineup (a true #1
-  goalie included) *and* a bit of variance luck. Most great teams land in the high
-  70s to low 80s in wins.
-
-## A note on the data
-
-`data.js` is **hand-curated and intentionally debatable** — arguing about the
-ratings and which legend belongs to which decade is half the fun. Players are
-bucketed into the decade they're most associated with for a given franchise, and
-ratings (75–99) are a subjective all-time tier, not a real metric. The original
-(1917–1934) Ottawa Senators are folded into the modern Senators in the spirit of
-"creation to now." Corrections and additions welcome via PR.
+- **Deterministic.** The Poisson draws are seeded from your exact roster, so the
+  same lineup *always* returns the same record — built for bragging.
+- **82-0-0 is hard on purpose.** The mapping is anchored so the best attainable
+  roster can reach it, but it needs elite scoring *and* a genuine high-save% goalie
+  (the run-and-gun '80s Oilers, with Fuhr's real .882 save %, famously leak goals).
 
 ## Deploy
 
