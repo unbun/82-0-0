@@ -101,21 +101,6 @@ Two things worth knowing:
   roster can reach it, but it needs elite scoring *and* a genuine high-save% goalie
   (the run-and-gun '80s Oilers, with Fuhr's real .882 save %, famously leak goals).
 
-## Deploy
-
-### GitHub Pages
-1. Push this folder to a GitHub repo.
-2. Repo **Settings → Pages → Build and deployment → Source: Deploy from a branch**.
-3. Pick your branch (e.g. `main`) and `/ (root)`. Save.
-4. Your site goes live at `https://<you>.github.io/<repo>/`.
-
-(The included `.nojekyll` file tells Pages to serve the files as-is.)
-
-### Vercel (free tier)
-1. Import the repo at [vercel.com/new](https://vercel.com/new).
-2. Framework preset: **Other**. Build command: none. Output dir: `./`.
-3. Deploy. (Or run `npx vercel` from this folder.)
-
 ## License
 
 MIT — see [LICENSE](LICENSE).
