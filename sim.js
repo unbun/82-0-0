@@ -9,17 +9,31 @@
  *   - A goalie's rating is GOALTENDING -> it drives goals you ALLOW.
  * Defensemen help a bit on both ends; forwards help a little on defense
  * (backchecking). See the math below.
+ *
+ * Positions: 'C' center, 'W' winger, 'D' defense, 'G' goalie. Forwards = C + W.
+ * Wingers and defensemen also carry a shot hand ('L'/'R'/'B'); playing one on
+ * their off-side costs OFFSIDE_PENALTY rating points (applied by the UI before a
+ * player reaches the sim, via each pick's effective rating).
  */
 (function (g) {
+  const OFFSIDE_PENALTY = 14;
+
+  // side is the slot's side: 'L' (LW/LD) or 'R' (RW/RD). A left shot is natural
+  // on the left, a right shot on the right; 'B' (both) is never penalized.
+  function offsidePenalty(hand, side) {
+    if (!side || hand === 'B' || !hand) return 0;
+    return hand === side ? 0 : OFFSIDE_PENALTY;
+  }
+
   const avg = (arr, fallback) =>
     arr.length ? arr.reduce((s, p) => s + p.o, 0) / arr.length : fallback;
 
   function ratings(players) {
-    const F = players.filter(p => p.p === 'F');
+    const F = players.filter(p => p.p === 'C' || p.p === 'W');
     const D = players.filter(p => p.p === 'D');
     const G = players.filter(p => p.p === 'G');
     return {
-      fwd: avg(F, 40),                              // avg forward rating
+      fwd: avg(F, 40),                              // avg forward (C+W) rating
       def: avg(D, 40),                              // avg defenseman rating
       goalie: G.length ? Math.max(...G.map(p => p.o)) : 40, // best goalie rating
     };
@@ -99,5 +113,5 @@
     };
   }
 
-  g.NHL_SIM = { simulateSeason, expectedGoals, ratings, seedFrom };
+  g.NHL_SIM = { simulateSeason, expectedGoals, ratings, seedFrom, offsidePenalty, OFFSIDE_PENALTY };
 })(typeof window !== 'undefined' ? window : globalThis);

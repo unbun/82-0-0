@@ -3,15 +3,19 @@
   const DATA = window.NHL_DATA;
   const SIM = window.NHL_SIM;
 
-  // Fixed lineup: 3 forwards, 2 defensemen, 1 goalie. Each slot, once filled,
-  // is locked — you can't swap it without restarting.
+  // The real hockey six. Each skater fills its strict position; wings and
+  // defense have a left/right side, and playing a skater on their off-side
+  // costs a rating penalty (SIM.offsidePenalty). Each slot, once filled, is
+  // locked — you can't swap it without restarting.
+  //   cat: which players may fill it ('C' | 'W' | 'D' | 'G')
+  //   side: 'L' | 'R' for wing/defense slots (undefined for C/G)
   const SLOTS = [
-    { label: 'Forward', cat: 'F' },
-    { label: 'Forward', cat: 'F' },
-    { label: 'Forward', cat: 'F' },
-    { label: 'Defense', cat: 'D' },
-    { label: 'Defense', cat: 'D' },
-    { label: 'Goalie',  cat: 'G' },
+    { label: 'Center',        code: 'C',  cat: 'C' },
+    { label: 'Left Wing',     code: 'LW', cat: 'W', side: 'L' },
+    { label: 'Right Wing',    code: 'RW', cat: 'W', side: 'R' },
+    { label: 'Left Defense',  code: 'LD', cat: 'D', side: 'L' },
+    { label: 'Right Defense', code: 'RD', cat: 'D', side: 'R' },
+    { label: 'Goalie',        code: 'G',  cat: 'G' },
   ];
   const REROLLS_PER_GAME = 1; // one mulligan per playthrough
 
@@ -45,11 +49,17 @@
 
   const pkey = (p) => `${p.n}|${p.p}|${p.o}`;
   const rnd = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const posLabel = (p) => (p.p === 'C' ? 'C' : p.p === 'G' ? 'G' : `${p.p}${p.h ? ' ' + p.h : ''}`);
 
-  const firstOpenSlot = (cat) => SLOTS.findIndex((s, i) => s.cat === cat && !roster[i]);
+  // Candidate (still-open) slots a player could fill, best (lowest penalty) first.
+  function candidateSlots(p) {
+    return SLOTS
+      .map((s, i) => ({ s, i }))
+      .filter((x) => x.s.cat === p.p && !roster[x.i])
+      .sort((a, b) => SIM.offsidePenalty(p.h, a.s.side) - SIM.offsidePenalty(p.h, b.s.side));
+  }
+  const isPickable = (p) => !drafted.has(pkey(p)) && candidateSlots(p).length > 0;
   const filledCount = () => roster.filter(Boolean).length;
-  const canPlace = (p) => firstOpenSlot(p.p) !== -1;
-  const isPickable = (p) => !drafted.has(pkey(p)) && canPlace(p);
 
   function renderSlots(justFilledIdx = -1) {
     slotsEl.innerHTML = '';
@@ -60,10 +70,11 @@
       if (p) {
         div.classList.add('filled');
         if (i === justFilledIdx) div.classList.add('just-filled');
+        const off = p.offside ? ` <span class="offtag">off-side −${SIM.OFFSIDE_PENALTY}</span>` : '';
         div.innerHTML =
-          `<span class="slot-label">${slot.label} · <span class="pos ${p.p}">${p.p}</span></span>` +
-          `<span class="slot-name">${p.n}</span>` +
-          `<span class="slot-meta">${p.team} · ${p.decade} · OVR ${p.o}</span>`;
+          `<span class="slot-label">${slot.label} · <span class="pos ${p.p}">${posLabel(p)}</span></span>` +
+          `<span class="slot-name">${p.n}${off}</span>` +
+          `<span class="slot-meta">${p.team} · ${p.decade} · OVR ${p.base}${p.offside ? ` → ${p.o}` : ''}</span>`;
       } else {
         div.innerHTML = `<span class="slot-label">${slot.label}</span><span class="empty-tip">—</span>`;
       }
@@ -73,8 +84,8 @@
   }
 
   // Pick a random bucket that has at least one pickable player. Dead buckets
-  // (nothing matches an open slot) are skipped for free — they don't burn your
-  // reroll, they just never appear.
+  // (nothing matches an open slot) are skipped for free — they never appear and
+  // don't burn your reroll.
   function pickValidRoll() {
     let roll, guard = 0;
     do {
@@ -102,12 +113,16 @@
     playersEl.innerHTML = '';
     const sorted = roll.team.eras[roll.decade].slice().sort((a, b) => b.o - a.o);
     for (const p of sorted) {
+      const pickable = isPickable(p);
+      const best = candidateSlots(p)[0];
+      const wouldOffside = pickable && best && SIM.offsidePenalty(p.h, best.s.side) > 0;
       const btn = document.createElement('button');
       btn.className = 'player';
-      btn.disabled = !isPickable(p);
+      btn.disabled = !pickable;
+      const warn = wouldOffside ? ` <span class="offtag">off-side −${SIM.OFFSIDE_PENALTY}</span>` : '';
       btn.innerHTML =
-        `<span class="pname">${p.n}</span>` +
-        `<span class="pright"><span class="pos ${p.p}">${p.p}</span><span class="ovr">${p.o}</span></span>`;
+        `<span class="pname">${p.n}${warn}</span>` +
+        `<span class="pright"><span class="pos ${p.p}">${posLabel(p)}</span><span class="ovr">${p.o}</span></span>`;
       btn.addEventListener('click', () => draftPlayer(p));
       playersEl.appendChild(btn);
     }
@@ -126,11 +141,21 @@
   }
 
   function draftPlayer(p) {
-    const slot = firstOpenSlot(p.p);
-    if (slot === -1) return;
-    roster[slot] = { ...p, team: currentRoll.team.name, decade: currentRoll.decade };
+    const best = candidateSlots(p)[0];
+    if (!best) return;
+    const penalty = SIM.offsidePenalty(p.h, best.s.side);
+    roster[best.i] = {
+      ...p,
+      team: currentRoll.team.name,
+      decade: currentRoll.decade,
+      slot: best.s.code,
+      side: best.s.side,
+      base: p.o,
+      o: p.o - penalty,   // effective rating the sim sees
+      offside: penalty > 0,
+    };
     drafted.add(pkey(p));
-    renderSlots(slot);
+    renderSlots(best.i);
     pickPanel.classList.add('hidden');
 
     if (filledCount() >= SLOTS.length) {
@@ -160,8 +185,11 @@
     $('record').className = 'record' + (v.perfect ? ' perfect' : '');
     $('verdict').innerHTML = `${v.text} <span class="pts">(${r.points} pts)</span>`;
 
-    $('result-roster').innerHTML = roster
-      .map((p) => `<span class="chip"><span class="pos ${p.p}">${p.p}</span> ${p.n}</span>`).join('');
+    $('result-roster').innerHTML = SLOTS.map((slot, i) => {
+      const p = roster[i];
+      const off = p.offside ? ' <span class="offtag">off-side</span>' : '';
+      return `<span class="chip"><span class="pos ${p.p}">${slot.code}</span> ${p.n}${off}</span>`;
+    }).join('');
 
     $('stat-line').innerHTML =
       `Attack <strong>${r.attack}</strong> · Defense <strong>${r.defense}</strong> — ` +
@@ -174,7 +202,10 @@
 
   function shareText() {
     const r = SIM.simulateSeason(roster);
-    const lines = roster.map((p) => `  ${p.p}  ${p.n} (${p.team} ${p.decade})`).join('\n');
+    const lines = SLOTS.map((slot, i) => {
+      const p = roster[i];
+      return `  ${slot.code.padEnd(2)} ${p.n} (${p.team} ${p.decade})${p.offside ? ' [off-side]' : ''}`;
+    }).join('\n');
     return `82-0-0 🏒  My all-time NHL lineup went ${r.w}-${r.l}-${r.t} (${r.points} pts)\n${lines}\nBuild yours!`;
   }
 
