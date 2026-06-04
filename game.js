@@ -95,7 +95,7 @@
     if (p.isGoalie) {
       const sv = (p.svpct * 100).toFixed(1);
       const imp = p.imp || {};
-      return `<span class="st">SV% <b>${sv}${imp.svpct ? '<i>~</i>' : ''}</b></span>` +
+      return `<span class="st">SV% <b${imp.svpct ? ' class="imp"' : ''}>${sv}</b></span>` +
              `<span class="st">GAA <b>${p.gaa.toFixed(2)}</b></span>` +
              `<span class="st">GP <b>${p.gp}</b></span>`;
     }
@@ -104,10 +104,10 @@
     return `<span class="st">PPG <b>${ppg}</b></span>` +
            `<span class="st">GPG <b>${p.gpg.toFixed(2)}</b></span>` +
            `<span class="st">APG <b>${p.apg.toFixed(2)}</b></span>` +
-           `<span class="st">SPG <b>${p.spg.toFixed(1)}${im.shots ? '<i>~</i>' : ''}</b></span>` +
+           `<span class="st">SPG <b${im.shots ? ' class="imp"' : ''}>${p.spg.toFixed(1)}</b></span>` +
            `<span class="st">PIM <b>${p.pimpg.toFixed(1)}</b></span>` +
-           `<span class="st">HIT <b>${p.hpg.toFixed(1)}${im.hb ? '<i>~</i>' : ''}</b></span>` +
-           `<span class="st">BLK <b>${p.bpg.toFixed(1)}${im.hb ? '<i>~</i>' : ''}</b></span>`;
+           `<span class="st">HIT <b${im.hb ? ' class="imp"' : ''}>${p.hpg.toFixed(1)}</b></span>` +
+           `<span class="st">BLK <b${im.hb ? ' class="imp"' : ''}>${p.bpg.toFixed(1)}</b></span>`;
   }
 
   // ── show current roll ────────────────────────────────────────────────────

@@ -136,7 +136,7 @@ h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: 1.5px; color
 .stats { display: flex; flex-wrap: wrap; gap: 0.3rem 0.55rem; justify-content: flex-end; }
 .st { font-size: 0.72rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .st b { color: var(--text); font-weight: 700; }
-.st i { color: var(--gold); font-style: normal; }
+.st b.imp { color: var(--muted); }
 .offtag { font-size: 0.6rem; font-weight: 800; color: var(--bad); margin-left: 0.4rem; letter-spacing: 0.5px; }
 @media (max-width: 560px) { .stats { gap: 0.2rem 0.4rem; } .st { font-size: 0.66rem; } .pinfo { min-width: 0; } }
 
