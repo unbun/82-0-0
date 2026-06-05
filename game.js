@@ -31,8 +31,8 @@
   // State
   let roster = new Array(SLOTS.length).fill(null);
   let drafted = new Set();
-  let teamRerollLeft = 3;    // three Team rerolls per run
-  let decadeRerollLeft = 1;  // one Era reroll per run
+  let teamRerollLeft = 4;    // four Team rerolls per run
+  let decadeRerollLeft = 2;  // two Era rerolls per run
   let curTeam = null, curDecade = null;
   let pendingPlayer = null;   // player waiting for the user to pick a slot
 
@@ -132,74 +132,123 @@
     showPick();
   }
 
+  // ── cross-position Rating ("R") — EA NHL-inspired, sort-only, not used in sim ──
+
+  function ratingRaw(p) {
+    if (typeof p.svpct === 'number') {
+      // Goalies: sv% is everything; GP reliability factor so small samples don't dominate
+      const rel = Math.min(1, (p.gp || 0) / 80);
+      return (p.svpct - 0.860) * 1350 * rel;
+    }
+    if (p.pos === 'D') // Defense: production + defensive contribution
+      return 22 * (p.ppg || 0) + 3 * (p.spg || 0) + 5 * (p.bpg || 0) + 2 * (p.hpg || 0);
+    // Forwards: scoring dominant
+    return 30 * (p.ppg || 0) + 4 * (p.spg || 0) + 2 * (p.bpg || 0) + 1.5 * (p.hpg || 0);
+  }
+
+  // Compute scale once at startup from full dataset (99.9th pct as ceiling).
+  const _allRaws = DATA.teams.flatMap(t =>
+    Object.values(t.eras).flatMap(e => [
+      ...e.skaters.map(ratingRaw),
+      ...e.goalies.map(g => ratingRaw({ svpct: g.svpct, gp: g.gp })),
+    ])
+  ).sort((a, b) => a - b);
+  const RATING_MAX = _allRaws[Math.floor(_allRaws.length * 0.999)] || 90;
+
+  function getRating(p) {
+    return Math.max(50, Math.min(99, Math.round(50 + ratingRaw(p) / RATING_MAX * 49)));
+  }
+
   // ── rendering: stat badges ───────────────────────────────────────────────
 
   function statBadges(p) {
+    const R = getRating(p);
     if (p.isGoalie) {
       const sv = (p.svpct * 100).toFixed(1);
       const imp = p.imp || {};
-      return `<span class="st">SV% <b${imp.svpct ? ' class="imp"' : ''}>${sv}</b></span>` +
+      return `<span class="st">R <b>${R}</b></span>` +
+             `<span class="st">SV% <b${imp.svpct ? ' class="imp"' : ''}>${sv}</b></span>` +
              `<span class="st">GAA <b>${p.gaa.toFixed(2)}</b></span>` +
              `<span class="st">GP <b>${p.gp}</b></span>`;
     }
     const im = p.imp || {};
     const ppg = (p.gpg + p.apg).toFixed(2);
-    return `<span class="st">PPG <b>${ppg}</b></span>` +
+    return `<span class="st">R <b>${R}</b></span>` +
+           `<span class="st">PPG <b>${ppg}</b></span>` +
            `<span class="st">GPG <b>${p.gpg.toFixed(2)}</b></span>` +
            `<span class="st">APG <b>${p.apg.toFixed(2)}</b></span>` +
            `<span class="st">SPG <b${im.shots ? ' class="imp"' : ''}>${p.spg.toFixed(1)}</b></span>` +
-           `<span class="st">PIM <b>${p.pimpg.toFixed(1)}</b></span>` +
-           `<span class="st">HIT <b${im.hb ? ' class="imp"' : ''}>${p.hpg.toFixed(1)}</b></span>` +
-           `<span class="st">BLK <b${im.hb ? ' class="imp"' : ''}>${p.bpg.toFixed(1)}</b></span>`;
+           `<span class="st">SV% <b${im.svpct ? ' class="imp"' : ''}>${p.isGoalie ? (p.svpct*100).toFixed(1) : '—'}</b></span>`;
   }
 
-  // ── sort state & column rendering ────────────────────────────────────────
+  // ── single unified list ──────────────────────────────────────────────────
 
-  const FWD_SORTS = [['ppg','PPG'],['gpg','GPG'],['apg','APG'],['spg','SPG']];
-  const DEF_SORTS = [['ppg','PPG'],['bpg','BLK'],['hpg','HIT'],['pimpg','PIM']];
-  const GOL_SORTS = [['gp','GP'],['svpct','SV%'],['gaa','GAA']];
+  // Sort options (R default; GAA sorts ascending, others descending)
+  const SORTS = [['r','R'],['ppg','PPG'],['gpg','GPG'],['apg','APG'],['spg','SPG'],['svpct','SV%'],['gaa','GAA'],['gp','GP']];
+  const ASC_SORTS = new Set(['gaa']); // these sort low-first
 
-  let sortBy = { fwds: 'ppg', dmen: 'ppg', goalies: 'gp' };
-  let curPool = { fwds: [], dmen: [], goalies: [] };
+  let curSortKey = 'r';
+  let curPosFilter = 'all'; // 'all' | 'f' | 'd' | 'g'
+  let curAllPlayers = [];
 
-  function sortedPlayers(arr, key) {
-    return [...arr].sort((a, b) => {
-      // GAA sorts ascending (lower = better); everything else descending
-      const av = a[key] ?? (key === 'gaa' ? 99 : -1);
-      const bv = b[key] ?? (key === 'gaa' ? 99 : -1);
-      return key === 'gaa' ? av - bv : bv - av;
-    });
+  function sortValue(p, key) {
+    if (key === 'r') return getRating(p);
+    const v = p[key];
+    if (v != null) return v;
+    // Missing stat: push to end
+    return ASC_SORTS.has(key) ? Infinity : -Infinity;
   }
 
-  function renderColumn(colId, sorts) {
-    const listEl = $(colId);
+  function renderPlayerList() {
+    const listEl = $('players');
     listEl.innerHTML = '';
-    const key = sortBy[colId];
-    const players = curPool[colId];
-    if (!players.length) return;
 
-    // Sort tabs — one click to re-sort, no sub-menus
+    // Filter by position
+    const filtered = curAllPlayers.filter(p => {
+      if (curPosFilter === 'f') return !p.isGoalie && p.pos !== 'D';
+      if (curPosFilter === 'd') return !p.isGoalie && p.pos === 'D';
+      if (curPosFilter === 'g') return !!p.isGoalie;
+      return true;
+    });
+
+    // Sort
+    const sorted = [...filtered].sort((a, b) => {
+      const av = sortValue(a, curSortKey), bv = sortValue(b, curSortKey);
+      return ASC_SORTS.has(curSortKey) ? av - bv : bv - av;
+    });
+
+    // Position filter tabs + sort tabs
     const ctrl = document.createElement('div');
     ctrl.className = 'sort-ctrl';
-    for (const [sk, label] of sorts) {
+
+    // Position filter
+    for (const [val, lbl] of [['all','All'],['f','F'],['d','D'],['g','G']]) {
       const btn = document.createElement('button');
-      btn.className = 'sort-tab' + (key === sk ? ' active' : '');
-      btn.textContent = label;
-      btn.addEventListener('click', () => {
-        if (sortBy[colId] === sk) return;
-        sortBy[colId] = sk;
-        renderColumn(colId, sorts);
-      });
+      btn.className = 'sort-tab pos-filter' + (curPosFilter === val ? ' active' : '');
+      btn.textContent = lbl;
+      btn.addEventListener('click', () => { curPosFilter = val; renderPlayerList(); });
+      ctrl.appendChild(btn);
+    }
+    // Divider
+    const sep = document.createElement('span');
+    sep.className = 'sort-sep';
+    ctrl.appendChild(sep);
+    // Sort tabs
+    for (const [sk, lbl] of SORTS) {
+      const btn = document.createElement('button');
+      btn.className = 'sort-tab' + (curSortKey === sk ? ' active' : '');
+      btn.textContent = lbl;
+      btn.addEventListener('click', () => { curSortKey = sk; renderPlayerList(); });
       ctrl.appendChild(btn);
     }
     listEl.appendChild(ctrl);
 
-    for (const p of sortedPlayers(players, key)) {
+    for (const p of sorted) {
       const pickable = isPickable(p);
       const row = document.createElement('button');
       row.className = 'player';
       row.disabled = !pickable;
-      const hand = p.isGoalie ? '' : `<span class="hand">${p.hand || '?'}</span>`;
+      const hand = (p.isGoalie || !p.hand) ? '' : `<span class="hand">${p.hand}</span>`;
       row.innerHTML =
         `<span class="pos-col">${positionTags(p)}</span>` +
         `<span class="pname-row"><span class="pname">${p.n}</span>${hand}</span>` +
@@ -209,8 +258,6 @@
       row.addEventListener('mouseleave', hideTooltip);
       listEl.appendChild(row);
     }
-
-    // Fit names to their container — one proportional font-size reduction if needed.
     requestAnimationFrame(() => fitNames(listEl));
   }
 
@@ -226,32 +273,27 @@
 
   // ── show current roll ────────────────────────────────────────────────────
 
-  const PLAYER_LISTS = ['fwds', 'dmen', 'goalies'];
+  const PLAYER_LISTS = ['players'];
 
   function showPick() {
     pendingPlayer = null;
     $('slot-chooser').classList.add('hidden');
-    PLAYER_LISTS.forEach((id) => $(id).classList.remove('hidden'));
+    $('players').classList.remove('hidden');
 
     $('roll-team').textContent = curTeam.name;
     $('roll-decade').textContent = curDecade;
 
-    const pool = poolFor(curTeam, curDecade);
-    curPool.fwds    = pool.filter((p) => !p.isGoalie && (p.pos === 'C' || p.pos === 'L' || p.pos === 'R'));
-    curPool.dmen    = pool.filter((p) => !p.isGoalie && p.pos === 'D');
-    curPool.goalies = pool.filter((p) => p.isGoalie);
+    curAllPlayers = poolFor(curTeam, curDecade);
 
-    renderColumn('fwds', FWD_SORTS);
-    renderColumn('dmen', DEF_SORTS);
-    renderColumn('goalies', GOL_SORTS);
+    renderPlayerList();
 
     $('reroll-team').disabled = teamRerollLeft <= 0;
     $('reroll-decade').disabled = decadeRerollLeft <= 0;
     $('reroll-team').title = teamRerollLeft > 0 ? `Team reroll (${teamRerollLeft} left)` : 'Team reroll used';
-    $('reroll-decade').title = decadeRerollLeft > 0 ? 'Era reroll (1 left)' : 'Era reroll used';
+    $('reroll-decade').title = decadeRerollLeft > 0 ? `Era reroll (${decadeRerollLeft} left)` : 'Era reroll used';
     const parts = [];
     if (teamRerollLeft > 0) parts.push(`${teamRerollLeft} Team reroll${teamRerollLeft > 1 ? 's' : ''} left`);
-    if (decadeRerollLeft > 0) parts.push('Era reroll left');
+    if (decadeRerollLeft > 0) parts.push(`${decadeRerollLeft} Era reroll${decadeRerollLeft > 1 ? 's' : ''} left`);
     $('reroll-note').textContent = parts.length ? parts.join(' · ') : 'No rerolls left';
 
     $('roll-panel').classList.add('hidden');
@@ -270,17 +312,23 @@
     }
     // Multiple valid slots — let the user choose.
     pendingPlayer = p;
-    PLAYER_LISTS.forEach((id) => $(id).classList.add('hidden'));
+    $('players').classList.add('hidden');
     const sc = $('slot-chooser');
     sc.classList.remove('hidden');
-    $('sc-name').textContent = p.n;
+
+    // Show "(L)" or "(R)" to hint at which side is natural for this player.
+    // Left-shot → natural on the LEFT side. Right-shot → natural on the RIGHT.
+    const sideHint = (!p.isGoalie && p.pos !== 'C' && p.hand && p.hand !== 'B')
+      ? ` (${p.hand})` : '';
+    $('sc-name').textContent = p.n + sideHint;
 
     const btns = $('sc-buttons');
     btns.innerHTML = '';
     for (const { s, i } of valids) {
       const btn = document.createElement('button');
-      btn.className = 'sc-btn';
-      btn.innerHTML = `<strong>${s.label}</strong>`;
+      const isNatural = !SIM.offsidePenalty(p.hand, s.side);
+      btn.className = 'sc-btn' + (isNatural ? ' natural' : '');
+      btn.innerHTML = `<strong>${s.label}</strong>` + (isNatural ? `<span class="nat-tag">natural</span>` : '');
       btn.addEventListener('click', () => placePlayer(p, { s, i }));
       btns.appendChild(btn);
     }
@@ -290,7 +338,7 @@
     cancel.addEventListener('click', () => {
       pendingPlayer = null;
       sc.classList.add('hidden');
-      PLAYER_LISTS.forEach((id) => $(id).classList.remove('hidden'));
+      $('players').classList.remove('hidden');
     });
     btns.appendChild(cancel);
   }
@@ -395,8 +443,11 @@
   function reset() {
     roster = new Array(SLOTS.length).fill(null);
     drafted = new Set();
-    teamRerollLeft = 3;
-    decadeRerollLeft = 1;
+    teamRerollLeft = 4;
+    decadeRerollLeft = 2;
+    curSortKey = 'r';
+    curPosFilter = 'all';
+    curAllPlayers = [];
     easterActive = false;
     rainbowMode = false; rainbowNextRoll = false;
     document.body.classList.remove('rainbow');

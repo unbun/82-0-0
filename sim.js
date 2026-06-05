@@ -139,8 +139,12 @@
     // ALL five skaters contribute to defense — not just the D-pair.
     const sv = Math.min(SV_MAX, Math.max(SV_MIN, goalie.svpct || 0.88));
 
-    // Goalie quality above replacement.
-    const svQuality = (sv - SV_BASELINE) * SV_SCALE;
+    // Goalie quality above replacement, with a soft shelf at 90%.
+    // Above 90%: slight bonus (reliable starter territory).
+    // Below 90%: slight penalty (below-average NHL starter).
+    const SV_SHELF_THRESHOLD = 0.90;
+    const svShelf = Math.min(0.30, Math.max(-0.30, (sv - SV_SHELF_THRESHOLD) * 6));
+    const svQuality = (sv - SV_BASELINE) * SV_SCALE + svShelf;
 
     // D-pair two-way quality: their PPG is a strong proxy for defensive intelligence
     // (smart offensive D control zone exits, maintain puck possession in the d-zone).

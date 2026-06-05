@@ -125,11 +125,7 @@ h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: 1.5px; color
 .reroll-mini:hover:not(:disabled) { border-color: var(--accent2); color: var(--text); }
 .reroll-mini:disabled { opacity: 0.3; cursor: not-allowed; }
 
-/* 3-column layout: Forwards | Defense | Goalies */
-.pick-lists { display: grid; grid-template-columns: 1fr 1fr 220px; gap: 0.7rem; margin-top: 0.6rem; align-items: start; }
-@media (max-width: 640px) { .pick-lists { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 420px) { .pick-lists { grid-template-columns: 1fr; } }
-.players { max-height: 56vh; overflow-y: auto; display: flex; flex-direction: column; gap: 0.35rem; padding-right: 0.2rem; }
+.players { max-height: 56vh; overflow-y: auto; display: flex; flex-direction: column; gap: 0.35rem; padding-right: 0.2rem; margin-top: 0.6rem; }
 .plist-head { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin: 0.5rem 0 0.1rem; position: sticky; top: 0; background: var(--panel); padding: 0.2rem 0; }
 /* Player card — position column is absolutely positioned so card height
  * is determined purely by the text content, exactly as before. */
@@ -177,8 +173,8 @@ h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: 1.5px; color
 .st b.imp { color: var(--muted); }
 .offtag { font-size: 0.58rem; font-weight: 800; color: var(--bad); margin-left: 0.3rem; letter-spacing: 0.5px; white-space: nowrap; }
 
-/* Sort tabs — compact pill row above each player column */
-.sort-ctrl { display: flex; flex-wrap: wrap; gap: 0.2rem; margin-bottom: 0.3rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--line); }
+/* Sort + filter control row */
+.sort-ctrl { display: flex; flex-wrap: wrap; gap: 0.2rem; margin-bottom: 0.3rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--line); align-items: center; }
 .sort-tab {
   background: transparent; border: 1px solid var(--line); color: var(--muted);
   border-radius: 4px; padding: 0.1rem 0.35rem;
@@ -186,6 +182,8 @@ h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: 1.5px; color
 }
 .sort-tab.active { background: var(--line); color: var(--text); border-color: transparent; }
 .sort-tab:hover:not(.active) { border-color: var(--accent2); color: var(--text); }
+.sort-tab.pos-filter.active { background: var(--accent2); border-color: transparent; color: #06102a; }
+.sort-sep { width: 1px; height: 14px; background: var(--line); margin: 0 0.2rem; flex-shrink: 0; }
 
 /* Rainbow mode — thin glowing rainbow border around the whole page */
 @keyframes rainbow-shift { to { background-position: 400% 0; } }
@@ -200,6 +198,9 @@ body.rainbow::after {
   background-clip: border-box;
   animation: rainbow-shift 3s linear infinite;
 }
+
+.sc-btn.natural { border-color: var(--accent); }
+.nat-tag { font-size: 0.58rem; color: var(--accent); margin-left: 0.4rem; font-weight: 600; }
 
 /* Slot chooser — shown when a player can fill multiple open slots */
 #slot-chooser { padding-top: 0.5rem; }
