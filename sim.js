@@ -203,16 +203,19 @@
   }
 
   // Star synergy bonus — applied silently; not shown to the user.
-  // 3-4 stars: small nudge. 5 stars: meaningful step. 6 stars: same step again.
-  const STAR_SMALL = 0.015; // 1.5% each direction for tier 1 (3 stars)
+  // 4 stars (with ≥1 D + ≥1 G star): small nudge. 5 stars: meaningful step. 6 stars: same step again.
+  const STAR_SMALL = 0.015; // 1.5% each direction for tier 1 (4 stars w/ D+G)
   const STAR_LARGE = 0.035; // 3.5% each direction for tiers 2-3 (5 and 6 stars)
 
   function simulateSeason(lineup) {
     const e = expectedGoals(lineup);
     let xGF = e.xGF, xGA = e.xGA;
 
-    const stars = lineup.filter(p => p.star).length;
-    if (stars >= 3) { xGF *= (1 + STAR_SMALL); xGA *= (1 - STAR_SMALL); }
+    const starPlayers = lineup.filter(p => p.star);
+    const stars = starPlayers.length;
+    const hasStarD = starPlayers.some(p => p.pos === 'D');
+    const hasStarG = starPlayers.some(p => isGoalie(p));
+    if (stars >= 4 && hasStarD && hasStarG) { xGF *= (1 + STAR_SMALL); xGA *= (1 - STAR_SMALL); }
     if (stars >= 5) { xGF *= (1 + STAR_LARGE); xGA *= (1 - STAR_LARGE); }
     if (stars >= 6) { xGF *= (1 + STAR_LARGE); xGA *= (1 - STAR_LARGE); }
     xGF = Math.max(XGF_MIN, xGF);

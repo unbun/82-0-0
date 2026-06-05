@@ -31,12 +31,13 @@ const TOP_GOALIES = 10;
 
 // Custom era boundaries (start year inclusive → era label).
 // Seasons whose start year falls before 1942 are excluded entirely.
-const ERAS = ['Original Six', 'Expansion', '90s', '2000s', '2010s', '2020s'];
+const ERAS = ['Original Six', 'Expansion', '80s', '90s', '2000s', '2010s', '2020s'];
 function eraOf(seasonId) {
   const yr = Math.floor(seasonId / 10000);
   if (yr < 1942) return null;          // pre-Original Six — excluded
   if (yr < 1967) return 'Original Six'; // 1942-43 through 1966-67
-  if (yr < 1992) return 'Expansion';   // 1967-68 through 1991-92
+  if (yr < 1980) return 'Expansion';   // 1967-68 through 1979-80
+  if (yr < 1992) return '80s';         // 1980-81 through 1991-92
   if (yr < 2000) return '90s';         // 1992-93 through 1999-2000
   if (yr < 2010) return '2000s';
   if (yr < 2020) return '2010s';
