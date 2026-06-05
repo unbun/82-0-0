@@ -49,18 +49,21 @@
 
   // Defense — ALL five skaters contribute, not just the D-pair
   const SV_BASELINE = 0.860;     // league-floor save% (replacement-level goalie)
-  const SV_SCALE = 36.0;         // (sv% − baseline) × scale = sv quality index
+  const SV_SCALE = 10.0;         // (sv% − baseline) × scale = sv quality index
   const D_PPG_COEFF = 0.48;      // D-pair PPG (their offensive skill proxies two-way
                                   // intelligence: breakouts, puck-moving, zone control)
   const BPG_COEFF = 0.25;        // ALL skaters' BLK/G — forwards and D both block shots
   const HPG_DEF_COEFF = 0.022;   // ALL skaters' HIT/G — hits help possession but don't
                                   // translate linearly to shot prevention (reduced weight)
   const PIM_OPP_COEFF = 0.056;   // each PIM/G unit adds xGA via opponent PP
-  const GA_BASE = 5.00;          // xGA for a team with no defensive value
-  const GA_SLOPE = 1.25;         // how steeply elite defense suppresses goals
+  const GA_BASE = 4.80;          // xGA for a team with no defensive value
+  const GA_SLOPE = 1.10;         // how steeply elite defense suppresses goals
 
   const SV_MIN = 0.860, SV_MAX = 0.940;
-  const XGF_MIN = 0.80, XGA_MIN = 0.25;
+  const XGF_MIN = 0.80, XGA_MIN = 0.35;
+
+  // Synergy: only 2+ star D AND a star G unlock sub-1.0 xGA territory.
+  const DEF_SYNERGY_MULT = 0.38;
 
   const isGoalie = (p) => typeof p.svpct === 'number';
 
@@ -213,11 +216,14 @@
 
     const starPlayers = lineup.filter(p => p.star);
     const stars = starPlayers.length;
-    const hasStarD = starPlayers.some(p => p.pos === 'D');
+    const starDCount = starPlayers.filter(p => p.pos === 'D').length;
+    const hasStarD = starDCount >= 1;
     const hasStarG = starPlayers.some(p => isGoalie(p));
     if (stars >= 4 && hasStarD && hasStarG) { xGF *= (1 + STAR_SMALL); xGA *= (1 - STAR_SMALL); }
     if (stars >= 5) { xGF *= (1 + STAR_LARGE); xGA *= (1 - STAR_LARGE); }
     if (stars >= 6) { xGF *= (1 + STAR_LARGE); xGA *= (1 - STAR_LARGE); }
+    // 2+ star D and a star G is the only path to xGA < 1.0
+    if (starDCount >= 2 && hasStarG) xGA *= DEF_SYNERGY_MULT;
     xGF = Math.max(XGF_MIN, xGF);
     xGA = Math.max(XGA_MIN, xGA);
 

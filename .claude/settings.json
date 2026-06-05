@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(system_profiler *)",
+      "Bash(cd *)",
+      "Bash(node *)"
+    ]
+  }
+}

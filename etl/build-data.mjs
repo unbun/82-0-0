@@ -388,7 +388,7 @@ async function main() {
         if (g.gp >= 50 && (!gBest.has(g.id) || g.svpct > gBest.get(g.id))) gBest.set(g.id, g.svpct);
     }
     const topSk = [...skBest.entries()].sort((a,b) => b[1]-a[1]).slice(0,200).map(([id]) => id);
-    const topG  = [...gBest.entries()].sort((a,b) => b[1]-a[1]).slice(0,30).map(([id]) => id);
+    const topG  = [...gBest.entries()].sort((a,b) => b[1]-a[1]).slice(0,60).map(([id]) => id);
     const starIds = new Set([...topSk, ...topG]);
 
     // Ensure at least 20 active (2020s era) players are starred.
