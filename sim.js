@@ -65,6 +65,10 @@
   // Synergy: only 2+ star D AND a star G unlock sub-1.0 xGA territory.
   const DEF_SYNERGY_MULT = 0.38;
 
+  // Without a star D, a star goalie can't fully cancel out a high-scoring attack.
+  // xGA must stay at least this fraction of xGF (run-and-gun without D = exposure).
+  const STARGOALIE_OPEN_FLOOR = 0.72;
+
   const isGoalie = (p) => typeof p.svpct === 'number';
 
   // Off-side penalty: small across the board, essentially invisible for elite D.
@@ -165,7 +169,11 @@
       + HPG_DEF_COEFF * totalHPGdef
       - oppPP;
 
-    const xGA = Math.max(XGA_MIN, GA_BASE - GA_SLOPE * defMetric);
+    const starDCount = dPair.filter(p => p.star).length;
+    let xGA = Math.max(XGA_MIN, GA_BASE - GA_SLOPE * defMetric);
+    // Star goalie without star D: xGA can't fall below 70% of xGF.
+    // A high-scoring team with no defensive structure is exposed in kind.
+    if (goalie.star && starDCount === 0) xGA = Math.max(xGA, xGF * STARGOALIE_OPEN_FLOOR);
 
     // 0–100 summary ratings for the result card.
     const attack  = Math.round(Math.max(0, Math.min(100, (rawScoring - 1.8) / (5.6 - 1.8) * 100)));
