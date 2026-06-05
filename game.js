@@ -316,10 +316,9 @@
     const sc = $('slot-chooser');
     sc.classList.remove('hidden');
 
-    // Show "(L)" or "(R)" to hint at which side is natural for this player.
-    // Left-shot → natural on the LEFT side. Right-shot → natural on the RIGHT.
-    const sideHint = (!p.isGoalie && p.pos !== 'C' && p.hand && p.hand !== 'B')
-      ? ` (${p.hand})` : '';
+    // Show "(L)" or "(R)" for all skaters including centers — useful if a center
+    // is placed on a wing slot. Left-shot → natural on the LEFT side.
+    const sideHint = (!p.isGoalie && p.hand && p.hand !== 'B') ? ` (${p.hand})` : '';
     $('sc-name').textContent = p.n + sideHint;
 
     const btns = $('sc-buttons');
@@ -396,14 +395,14 @@
   // ── simulation + result ──────────────────────────────────────────────────
 
   function verdictFor(r) {
-    if (r.w === 82 && r.l === 0 && r.t === 0) return { text: '🏆 PERFECT! 82-0-0. The greatest team ever assembled.', perfect: true };
-    if (r.l === 0) return { text: `Unbeaten! But ${r.t} tie${r.t === 1 ? '' : 's'} kept you from immortality.`, perfect: false };
-    if (r.points >= 150) return { text: 'A juggernaut — but not quite perfect.', perfect: false };
-    if (r.points >= 115) return { text: 'A serious Cup contender.', perfect: false };
-    if (r.points >= 85) return { text: 'A solid playoff team.', perfect: false };
-    if (r.points >= 60) return { text: 'Bubble team — might sneak into the playoffs.', perfect: false };
-    if (r.points >= 35) return { text: 'Rough season. This roster needs work.', perfect: false };
-    return { text: 'Brutal. Back to the drawing board.', perfect: false };
+    if (r.points >= 164) return { text: 'Perfect',      perfect: true };
+    if (r.points >= 135) return { text: 'Dynasty',      perfect: false };
+    if (r.points >= 115) return { text: 'Legendary',    perfect: false };
+    if (r.points >= 100) return { text: 'Contender',    perfect: false };
+    if (r.points >= 92)  return { text: 'In The Fight', perfect: false };
+    if (r.points >= 80)  return { text: "No Man's Land",perfect: false };
+    if (r.points >= 65)  return { text: 'Rebuilding',   perfect: false };
+    return                      { text: 'Tanking',       perfect: false };
   }
 
   function simulate() {
