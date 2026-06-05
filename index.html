@@ -87,7 +87,7 @@
 xGA = base − slope · (sv_quality + D_PPG·0.48
       + allSkaters_BLK·0.22 + allSkaters_HIT·0.038 − PIM_penalty)</pre>
         <p><strong>Forwards' HIT and BLK contribute to defense</strong> — physical play wins puck battles in all three zones. <strong>Elite offensive D add an xGF bonus</strong> beyond their rawScoring share (power-play QB, breakouts, zone entries). A <em>playmaking balance factor</em> penalizes all-sniper or all-playmaker lineups (assists should outnumber goals ~1.8:1 in real NHL play). PIM costs you on both sides.</p>
-        <p>Then 82 games are simulated: each draws <code>goalsFor ~ Poisson(xGF)</code> and <code>goalsAgainst ~ Poisson(xGA)</code>. The draws are <strong>seeded from your exact roster</strong> — same lineup always returns the same record. Going 82-0-0 requires elite stats at every position, a high-SV% goalie, and some Poisson luck.</p>
+        <p>Then 82 games are simulated. For each game, four pairs of smaller Poisson draws are summed — <code>goalsFor = Σ Poisson(xGF/4)</code>, <code>goalsAgainst = Σ Poisson(xGA/4)</code> — then compared. Summing four sub-draws keeps the same average goals but reduces game-to-game variance by 4×, so a great lineup reliably earns a great record instead of getting unlucky. The draws are <strong>seeded from your exact roster</strong> — same lineup always returns the same record.</p>
       </div>
     </details>
   </main>

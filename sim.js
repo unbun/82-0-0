@@ -49,7 +49,7 @@
 
   // Defense — ALL five skaters contribute, not just the D-pair
   const SV_BASELINE = 0.860;     // league-floor save% (replacement-level goalie)
-  const SV_SCALE = 26.0;         // (sv% − baseline) × scale = sv quality index
+  const SV_SCALE = 30.0;         // (sv% − baseline) × scale = sv quality index
   const D_PPG_COEFF = 0.48;      // D-pair PPG (their offensive skill proxies two-way
                                   // intelligence: breakouts, puck-moving, zone control)
   const BPG_COEFF = 0.22;        // ALL skaters' BLK/G — forwards and D both block shots
@@ -218,11 +218,19 @@
     xGF = Math.max(XGF_MIN, xGF);
     xGA = Math.max(XGA_MIN, xGA);
 
+    // Sub-draw variance reduction: each game is simulated as K independent
+    // "periods", each drawing from Poisson(rate/K), then summed. The sum has
+    // the same expected goals as one full draw but K times less variance —
+    // less game-to-game luck, so a good lineup reliably earns its record.
+    const K = 4;
     const rng = mulberry32(seedFrom(lineup));
     let w = 0, l = 0, t = 0;
     for (let game = 0; game < 82; game++) {
-      const gf = poisson(e.xGF, rng);
-      const ga = poisson(e.xGA, rng);
+      let gf = 0, ga = 0;
+      for (let period = 0; period < K; period++) {
+        gf += poisson(xGF / K, rng);
+        ga += poisson(xGA / K, rng);
+      }
       if (gf > ga) w++; else if (gf < ga) l++; else t++;
     }
     return {
