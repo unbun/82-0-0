@@ -203,22 +203,18 @@
   }
 
   // Star synergy bonus — applied silently; not shown to the user.
-  // Having multiple star-caliber players on the same team creates chemistry
-  // that's greater than the sum of individual parts.
-  //   3-4 stars: tier 1 (mild boost)
-  //   5 stars:   tier 2 applied on top
-  //   6 stars:   tier 3 applied on top
-  const STAR_XGF_BOOST = 0.030; // +3% xGF per tier
-  const STAR_XGA_DRAG  = 0.030; // −3% xGA per tier
+  // 3-4 stars: small nudge. 5 stars: meaningful step. 6 stars: same step again.
+  const STAR_SMALL = 0.015; // 1.5% each direction for tier 1 (3 stars)
+  const STAR_LARGE = 0.035; // 3.5% each direction for tiers 2-3 (5 and 6 stars)
 
   function simulateSeason(lineup) {
     const e = expectedGoals(lineup);
     let xGF = e.xGF, xGA = e.xGA;
 
     const stars = lineup.filter(p => p.star).length;
-    if (stars >= 3) { xGF *= (1 + STAR_XGF_BOOST); xGA *= (1 - STAR_XGA_DRAG); }
-    if (stars >= 5) { xGF *= (1 + STAR_XGF_BOOST); xGA *= (1 - STAR_XGA_DRAG); }
-    if (stars >= 6) { xGF *= (1 + STAR_XGF_BOOST); xGA *= (1 - STAR_XGA_DRAG); }
+    if (stars >= 3) { xGF *= (1 + STAR_SMALL); xGA *= (1 - STAR_SMALL); }
+    if (stars >= 5) { xGF *= (1 + STAR_LARGE); xGA *= (1 - STAR_LARGE); }
+    if (stars >= 6) { xGF *= (1 + STAR_LARGE); xGA *= (1 - STAR_LARGE); }
     xGF = Math.max(XGF_MIN, xGF);
     xGA = Math.max(XGA_MIN, xGA);
 

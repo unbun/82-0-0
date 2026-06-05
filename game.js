@@ -148,6 +148,62 @@
            `<span class="st">BLK <b${im.hb ? ' class="imp"' : ''}>${p.bpg.toFixed(1)}</b></span>`;
   }
 
+  // ── sort state & column rendering ────────────────────────────────────────
+
+  const FWD_SORTS = [['ppg','PPG'],['gpg','GPG'],['apg','APG'],['spg','SPG'],['pimpg','PIM'],['hpg','HIT'],['bpg','BLK']];
+  const DEF_SORTS = [['ppg','PPG'],['gpg','GPG'],['apg','APG'],['bpg','BLK'],['hpg','HIT'],['pimpg','PIM']];
+  const GOL_SORTS = [['gp','GP'],['svpct','SV%'],['gaa','GAA']];
+
+  let sortBy = { fwds: 'ppg', dmen: 'ppg', goalies: 'gp' };
+  let curPool = { fwds: [], dmen: [], goalies: [] };
+
+  function sortedPlayers(arr, key) {
+    return [...arr].sort((a, b) => {
+      // GAA sorts ascending (lower = better); everything else descending
+      const av = a[key] ?? (key === 'gaa' ? 99 : -1);
+      const bv = b[key] ?? (key === 'gaa' ? 99 : -1);
+      return key === 'gaa' ? av - bv : bv - av;
+    });
+  }
+
+  function renderColumn(colId, sorts) {
+    const listEl = $(colId);
+    listEl.innerHTML = '';
+    const key = sortBy[colId];
+    const players = curPool[colId];
+    if (!players.length) return;
+
+    // Sort tabs — one click to re-sort, no sub-menus
+    const ctrl = document.createElement('div');
+    ctrl.className = 'sort-ctrl';
+    for (const [sk, label] of sorts) {
+      const btn = document.createElement('button');
+      btn.className = 'sort-tab' + (key === sk ? ' active' : '');
+      btn.textContent = label;
+      btn.addEventListener('click', () => {
+        if (sortBy[colId] === sk) return;
+        sortBy[colId] = sk;
+        renderColumn(colId, sorts);
+      });
+      ctrl.appendChild(btn);
+    }
+    listEl.appendChild(ctrl);
+
+    for (const p of sortedPlayers(players, key)) {
+      const pickable = isPickable(p);
+      const row = document.createElement('button');
+      row.className = 'player';
+      row.disabled = !pickable;
+      const hand = p.isGoalie ? '' : ` <span class="hand">${p.hand || '?'}</span>`;
+      row.innerHTML =
+        `<span class="pinfo">${positionTags(p)}${hand}` +
+        `<span class="pname">${p.n}</span></span>` +
+        `<span class="stats">${statBadges(p)}</span>`;
+      row.addEventListener('click', () => onPlayerClick(p));
+      listEl.appendChild(row);
+    }
+  }
+
   // ── show current roll ────────────────────────────────────────────────────
 
   const PLAYER_LISTS = ['fwds', 'dmen', 'goalies'];
@@ -161,38 +217,13 @@
     $('roll-decade').textContent = curDecade;
 
     const pool = poolFor(curTeam, curDecade);
-    const fwds = pool.filter((p) => !p.isGoalie && (p.pos === 'C' || p.pos === 'L' || p.pos === 'R'));
-    const dmen = pool.filter((p) => !p.isGoalie && p.pos === 'D');
-    const goalies = pool.filter((p) => p.isGoalie);
+    curPool.fwds    = pool.filter((p) => !p.isGoalie && (p.pos === 'C' || p.pos === 'L' || p.pos === 'R'));
+    curPool.dmen    = pool.filter((p) => !p.isGoalie && p.pos === 'D');
+    curPool.goalies = pool.filter((p) => p.isGoalie);
 
-    const fwdList = $('fwds');
-    const dList = $('dmen');
-    const gList = $('goalies');
-    fwdList.innerHTML = ''; dList.innerHTML = ''; gList.innerHTML = '';
-
-    const addGroup = (title, arr, list) => {
-      if (!arr.length) return;
-      const h = document.createElement('div'); h.className = 'plist-head'; h.textContent = title;
-      list.appendChild(h);
-      for (const p of arr) {
-        const pickable = isPickable(p);
-        const row = document.createElement('button');
-        row.className = 'player';
-        row.disabled = !pickable;
-        const hand = p.isGoalie ? '' : ` <span class="hand">${p.hand || '?'}</span>`;
-        row.innerHTML =
-          `<span class="pinfo">${positionTags(p)}${hand}` +
-          `<span class="pname">${p.n}</span></span>` +
-          `<span class="stats">${statBadges(p)}</span>`;
-
-        row.addEventListener('click', () => onPlayerClick(p));
-        list.appendChild(row);
-      }
-    };
-
-    addGroup('Forwards — by PPG', fwds, fwdList);
-    addGroup('Defense — by PPG', dmen, dList);
-    addGroup('Goalies — by GP', goalies, gList);
+    renderColumn('fwds', FWD_SORTS);
+    renderColumn('dmen', DEF_SORTS);
+    renderColumn('goalies', GOL_SORTS);
 
     $('reroll-team').disabled = teamRerollLeft <= 0;
     $('reroll-decade').disabled = decadeRerollLeft <= 0;
@@ -250,6 +281,8 @@
     const offside = !!SIM.offsidePenalty(p.hand, s.side);
     roster[i] = { ...p, slot: s.code, slotSide: s.side, offside, teamName: curTeam.name, teamId: curTeam.id, decade: curDecade };
     drafted.add(p.id);
+    // Rainbow: Jake Allen has a 1-in-34 chance on any draft (not just egg mode).
+    if (isJakeAllen(p) && !rainbowMode && Math.random() < 1 / 34) activateRainbow();
     pendingPlayer = null;
     $('slot-chooser').classList.add('hidden');
     $('pick-panel').classList.add('hidden');
@@ -345,6 +378,8 @@
     teamRerollLeft = 3;
     decadeRerollLeft = 1;
     easterActive = false;
+    rainbowMode = false; rainbowNextRoll = false;
+    document.body.classList.remove('rainbow');
     curTeam = curDecade = pendingPlayer = null;
     $('slot-chooser').classList.add('hidden');
     PLAYER_LISTS.forEach((id) => { $(id).classList.remove('hidden'); $(id).innerHTML = ''; });
@@ -357,12 +392,36 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  // ── rainbow mode state (declared here so placePlayer and reset can see it) ──
+  let rainbowMode = false;
+  let rainbowNextRoll = false;
+
+  function activateRainbow() {
+    rainbowMode = true;
+    rainbowNextRoll = true;
+    document.body.classList.add('rainbow');
+    toast('🌈');
+  }
+  function deactivateRainbow() {
+    rainbowMode = false;
+    rainbowNextRoll = false;
+    document.body.classList.remove('rainbow');
+  }
+
   // ── wire up ──────────────────────────────────────────────────────────────
-  $('roll-btn').addEventListener('click', rollFresh);
+  $('roll-btn').addEventListener('click', () => {
+    // Rainbow mode: force next roll to STL 90s (the Gretzky era in St. Louis).
+    if (rainbowNextRoll) {
+      rainbowNextRoll = false;
+      const stl = TEAMS.find(t => t.id === 'STL');
+      if (stl && stl.eras['90s']) { curTeam = stl; curDecade = '90s'; showPick(); return; }
+    }
+    rollFresh();
+  });
   $('reroll-team').addEventListener('click', rerollTeam);
   $('reroll-decade').addEventListener('click', rerollDecade);
   $('sim-btn').addEventListener('click', simulate);
-  $('again-btn').addEventListener('click', reset);
+  $('again-btn').addEventListener('click', () => { deactivateRainbow(); reset(); });
   $('share-btn').addEventListener('click', async () => {
     const text = shareText();
     try {
@@ -402,4 +461,5 @@
       toast('🏒 jake mode');
     }
   });
+
 })();
