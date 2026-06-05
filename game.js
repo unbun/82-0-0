@@ -31,8 +31,8 @@
   // State
   let roster = new Array(SLOTS.length).fill(null);
   let drafted = new Set();
-  let teamRerollLeft = 3;    // three Team rerolls per run
-  let decadeRerollLeft = 2;  // two Era rerolls per run
+  let teamRerollLeft = 1;
+  let decadeRerollLeft = 1;
   let curTeam = null, curDecade = null;
   let pendingPlayer = null;   // player waiting for the user to pick a slot
 
