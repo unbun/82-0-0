@@ -13,7 +13,7 @@
 <body>
   <header>
     <h1>82<span class="dash">-</span>0<span class="dash">-</span><span id="easter-zero">0</span></h1>
-    <p class="tag">Build an NHL all-time roster. Can you go <strong>82 wins, 0 losses, 0 ties?</strong></p>
+    <p class="tag">Build an NHL all-time roster. Can you go <strong>82-0-0?</strong></p>
   </header>
 
   <main>
@@ -27,7 +27,7 @@
     <!-- The roll / draft panel -->
     <section id="draft" aria-label="Draft">
       <div id="roll-panel" class="panel">
-        <button id="roll-btn" class="primary big">🎲 Roll first pick</button>
+        <button id="roll-btn" class="primary big">Roll first pick</button>
         <div class="instructions">
           <p><strong>Goal:</strong> draft a 6-player lineup — C · LW · RW · LD · RD · G — and simulate an 82-game season. Can you go <strong>82-0-0</strong>?</p>
           <ul>
@@ -86,8 +86,7 @@
 
 xGA = base − slope · (sv_quality + D_PPG·0.48
       + allSkaters_BLK·0.22 + allSkaters_HIT·0.038 − PIM_penalty)</pre>
-        <p><strong>Forwards' HIT and BLK contribute to defense</strong> — physical play wins puck battles in all three zones. <strong>Elite offensive D add an xGF bonus</strong> beyond their rawScoring share (power-play QB, breakouts, zone entries). A <em>playmaking balance factor</em> penalizes all-sniper or all-playmaker lineups (assists should outnumber goals ~1.8:1 in real NHL play). PIM costs you on both sides.</p>
-        <p>Then 82 independent games are simulated. For each game: draw a random integer from <code>Poisson(xGF)</code> for goals scored and one from <code>Poisson(xGA)</code> for goals allowed, then compare. The <strong>Poisson distribution</strong> gives you a random count that averages to its rate (λ) but bounces around it — if xGF is 4.2, any given game might produce 1 goal or 7. More wins come from having a high xGF and a low xGA, so that the gap between the two draws is reliably positive. There is no "luck" to reroll — the draws are <strong>seeded from your exact roster</strong>, so the same lineup always produces the same 82-game record.</p>
+        <p>Then 82 independent games are simulated. For each game: across <code>Poisson(xGF) > = Poisson(xGA)</code> for goals allowed, then compare. There is no "luck" to rerolling — the draws are <strong>seeded from your exact roster</strong>, so the same lineup always produces the same 82-game record.</p>
       </div>
     </details>
   </main>

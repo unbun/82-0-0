@@ -200,6 +200,8 @@
         `<span class="pname-row"><span class="pname">${p.n}</span>${hand}</span>` +
         `<span class="stats">${statBadges(p)}</span>`;
       row.addEventListener('click', () => onPlayerClick(p));
+      row.addEventListener('mouseenter', (e) => showTooltip(p, e.currentTarget));
+      row.addEventListener('mouseleave', hideTooltip);
       listEl.appendChild(row);
     }
 
@@ -403,6 +405,78 @@
     $('roll-btn').textContent = '🎲 Roll first pick';
     $('roll-panel').classList.remove('hidden');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // ── player card tooltip ───────────────────────────────────────────────────
+
+  let ttEl = null;
+
+  function fmtHt(inches) {
+    if (!inches) return null;
+    return `${Math.floor(inches / 12)}′${inches % 12}″`;
+  }
+
+  function showTooltip(p, anchor) {
+    hideTooltip();
+    const tt = document.createElement('div');
+    tt.className = 'player-tt';
+
+    // Positions
+    const cats = catsOf(p);
+    const posLabels = p.isGoalie ? ['G']
+      : [...(cats.includes('C') ? ['C'] : []), ...(cats.includes('W') ? ['LW','RW'] : []), ...(cats.includes('D') ? ['LD','RD'] : [])];
+    const posRow = posLabels.map(l => {
+      const cls = l === 'G' ? 'G' : (l === 'C' ? 'C' : (l === 'LD' || l === 'RD' ? 'D' : 'W'));
+      return `<span class="pos ${cls}">${l}</span>`;
+    }).join('');
+
+    // Physical
+    const physParts = [];
+    if (!p.isGoalie && p.hand) physParts.push(`<span class="tt-kv"><b>Shoots</b> ${p.hand === 'L' ? 'Left' : p.hand === 'R' ? 'Right' : 'Both'}</span>`);
+    if (p.ht) physParts.push(`<span class="tt-kv"><b>Height</b> ${fmtHt(p.ht)}</span>`);
+    if (p.wt) physParts.push(`<span class="tt-kv"><b>Weight</b> ${p.wt} lbs</span>`);
+
+    // Sim stats
+    let statsHtml = '';
+    if (p.isGoalie) {
+      const imp = p.imp || {};
+      statsHtml =
+        `<span class="tt-kv"><b>SV%</b> ${(p.svpct*100).toFixed(1)}${imp.svpct ? '<i> ~</i>' : ''}</span>` +
+        `<span class="tt-kv"><b>GAA</b> ${p.gaa.toFixed(2)}</span>` +
+        `<span class="tt-kv"><b>GP</b> ${p.gp}</span>`;
+    } else {
+      const im = p.imp || {};
+      statsHtml =
+        `<span class="tt-kv"><b>PPG</b> ${(p.gpg+p.apg).toFixed(2)}</span>` +
+        `<span class="tt-kv"><b>GPG</b> ${p.gpg.toFixed(2)}</span>` +
+        `<span class="tt-kv"><b>APG</b> ${p.apg.toFixed(2)}</span>` +
+        `<span class="tt-kv"><b>SPG</b> ${p.spg.toFixed(1)}${im.shots ? '<i> ~</i>' : ''}</span>` +
+        `<span class="tt-kv"><b>PIM/G</b> ${p.pimpg.toFixed(1)}</span>` +
+        `<span class="tt-kv"><b>HIT/G</b> ${p.hpg.toFixed(1)}${im.hb ? '<i> ~</i>' : ''}</span>` +
+        `<span class="tt-kv"><b>BLK/G</b> ${p.bpg.toFixed(1)}${im.hb ? '<i> ~</i>' : ''}</span>`;
+    }
+
+    tt.innerHTML =
+      `<div class="tt-name">${p.n}</div>` +
+      `<div class="tt-pos">${posRow}</div>` +
+      (physParts.length ? `<div class="tt-phys">${physParts.join('')}</div>` : '') +
+      `<div class="tt-stats">${statsHtml}</div>`;
+
+    document.body.appendChild(tt);
+    ttEl = tt;
+
+    // Position: prefer right of anchor, flip left if near edge.
+    const rect = anchor.getBoundingClientRect();
+    const ttW = 210;
+    let left = rect.right + 8;
+    if (left + ttW > window.innerWidth - 8) left = rect.left - ttW - 8;
+    let top = rect.top + window.scrollY;
+    tt.style.left = Math.max(8, left) + 'px';
+    tt.style.top = top + 'px';
+  }
+
+  function hideTooltip() {
+    if (ttEl) { ttEl.remove(); ttEl = null; }
   }
 
   // ── rainbow mode state (declared here so placePlayer and reset can see it) ──

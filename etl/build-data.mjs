@@ -330,16 +330,49 @@ async function main() {
     console.log(`  ${fr.id}: ${Object.keys(eraData).length} eras`);
   }
 
-  // 6) Backfill shot hand for skaters not seen in realtime (older players).
-  console.log(`Backfilling shot hand for ${handNeeded.size} players…`);
-  const needArr = [...handNeeded];
-  await pool(needArr, 8, async (pid) => {
+  // 6) Backfill hand, height, weight for all players in the assembled data.
+  // Build height/weight maps from already-cached player pages first (free).
+  const htOf = new Map(), wtOf = new Map();
+  const CACHE_DIR = CACHE;
+  for (const f of fs.readdirSync(CACHE_DIR).filter(f => f.startsWith('player_'))) {
+    try {
+      const j = JSON.parse(fs.readFileSync(path.join(CACHE_DIR, f), 'utf8'));
+      const pid = parseInt(f.replace('player_','').replace('.json',''), 10);
+      if (j.heightInInches) htOf.set(pid, j.heightInInches);
+      if (j.weightInPounds) wtOf.set(pid, j.weightInPounds);
+      if (j.shootsCatches) handOf.set(pid, j.shootsCatches);
+    } catch {}
+  }
+
+  // Collect ALL unique player IDs in the assembled data that are missing ht/wt,
+  // then fetch their landing pages (cached responses are instant).
+  const allIds = new Set();
+  for (const t of out.teams) for (const e of Object.keys(t.eras)) {
+    for (const s of t.eras[e].skaters) allIds.add(s.id);
+    for (const g of t.eras[e].goalies) allIds.add(g.id);
+  }
+  const needArr = [...allIds].filter(pid => !htOf.has(pid));
+  console.log(`Fetching landing pages for ${needArr.length} players missing ht/wt…`);
+  await pool(needArr, 12, async (pid) => {
     const j = await fetchJSON(`${AWEB}/player/${pid}/landing`, `player_${pid}`);
-    if (j && j.shootsCatches) handOf.set(pid, j.shootsCatches);
+    if (!j) return;
+    if (j.shootsCatches) handOf.set(pid, j.shootsCatches);
+    if (j.heightInInches) htOf.set(pid, j.heightInInches);
+    if (j.weightInPounds) wtOf.set(pid, j.weightInPounds);
   });
-  // stamp hand onto every skater
-  for (const t of out.teams) for (const era of Object.keys(t.eras))
-    for (const s of t.eras[era].skaters) s.hand = handOf.get(s.id) || 'L';
+
+  // Stamp hand, height, weight onto every skater and goalie.
+  for (const t of out.teams) for (const era of Object.keys(t.eras)) {
+    for (const s of t.eras[era].skaters) {
+      s.hand = handOf.get(s.id) || 'L';
+      if (htOf.has(s.id)) s.ht = htOf.get(s.id);
+      if (wtOf.has(s.id)) s.wt = wtOf.get(s.id);
+    }
+    for (const g of t.eras[era].goalies) {
+      if (htOf.has(g.id)) g.ht = htOf.get(g.id);
+      if (wtOf.has(g.id)) g.wt = wtOf.get(g.id);
+    }
+  }
 
   // 6b) Star player flags: top 80 skaters by career-best PPG + top 10 goalies
   // by career-best SV% (min 50 GP). At least 20 must be active in 2026 (2020s era).
