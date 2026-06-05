@@ -131,39 +131,36 @@ h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: 1.5px; color
 @media (max-width: 420px) { .pick-lists { grid-template-columns: 1fr; } }
 .players { max-height: 56vh; overflow-y: auto; display: flex; flex-direction: column; gap: 0.35rem; padding-right: 0.2rem; }
 .plist-head { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin: 0.5rem 0 0.1rem; position: sticky; top: 0; background: var(--panel); padding: 0.2rem 0; }
-/* Player card — CSS grid: narrow left column for positions, right for content.
- * Grid is more reliable than flex on <button> elements across browsers. */
+/* Player card — position column is absolutely positioned so card height
+ * is determined purely by the text content, exactly as before. */
 .player {
-  display: grid; grid-template-columns: 26px 1fr;
+  position: relative;
+  display: flex; flex-direction: column; gap: 0.22rem;
   background: var(--bg2); border: 1px solid var(--line); border-radius: 10px;
-  padding: 0; cursor: pointer; text-align: left; color: var(--text);
-  font: inherit; transition: border-color 0.15s, transform 0.1s;
-  width: 100%; overflow: hidden; min-height: 52px;
+  padding: 0.4rem 0.65rem 0.4rem 34px;   /* left padding makes room for pos-col */
+  cursor: pointer; text-align: left; color: var(--text);
+  font: inherit; transition: border-color 0.15s, transform 0.1s; width: 100%;
 }
 .player:hover:not(:disabled) { border-color: var(--accent); transform: translateX(2px); }
 .player:disabled { opacity: 0.38; cursor: not-allowed; }
 .player.off { border-style: dashed; }
 
-/* Left strip: position badges stack vertically, each gets an equal slice of height */
+/* Position column: absolute, spans full card height automatically */
 .pos-col {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 28px;
   display: flex; flex-direction: column;
   border-right: 1px solid rgba(255,255,255,0.07);
-  grid-row: 1; align-self: stretch;
+  border-radius: 9px 0 0 9px; overflow: hidden;
 }
 .pos-col .pos {
   flex: 1; display: flex; align-items: center; justify-content: center;
-  border-radius: 0; padding: 0; font-size: 0.54rem; line-height: 1; min-height: 0;
+  border-radius: 0; padding: 0; font-size: 0.54rem; line-height: 1;
 }
 
-/* Right section: name row on top, stats below */
-.pcontent {
-  padding: 0.38rem 0.55rem;
-  display: flex; flex-direction: column; gap: 0.22rem;
-  min-width: 0;
-}
+/* Name row — horizontally fits name + hand badge */
 .pname-row {
   display: flex; align-items: center; gap: 0.35rem;
-  min-width: 0; width: 100%; overflow: hidden;
+  min-width: 0; overflow: hidden; width: 100%;
 }
 .player .pname {
   font-weight: 700; white-space: nowrap; overflow: hidden;

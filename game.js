@@ -150,8 +150,8 @@
 
   // ── sort state & column rendering ────────────────────────────────────────
 
-  const FWD_SORTS = [['ppg','PPG'],['gpg','GPG'],['apg','APG'],['spg','SPG'],['pimpg','PIM'],['hpg','HIT'],['bpg','BLK']];
-  const DEF_SORTS = [['ppg','PPG'],['gpg','GPG'],['apg','APG'],['bpg','BLK'],['hpg','HIT'],['pimpg','PIM']];
+  const FWD_SORTS = [['ppg','PPG'],['gpg','GPG'],['apg','APG'],['spg','SPG']];
+  const DEF_SORTS = [['ppg','PPG'],['bpg','BLK'],['hpg','HIT'],['pimpg','PIM']];
   const GOL_SORTS = [['gp','GP'],['svpct','SV%'],['gaa','GAA']];
 
   let sortBy = { fwds: 'ppg', dmen: 'ppg', goalies: 'gp' };
@@ -197,10 +197,8 @@
       const hand = p.isGoalie ? '' : `<span class="hand">${p.hand || '?'}</span>`;
       row.innerHTML =
         `<span class="pos-col">${positionTags(p)}</span>` +
-        `<span class="pcontent">` +
-          `<span class="pname-row"><span class="pname">${p.n}</span>${hand}</span>` +
-          `<span class="stats">${statBadges(p)}</span>` +
-        `</span>`;
+        `<span class="pname-row"><span class="pname">${p.n}</span>${hand}</span>` +
+        `<span class="stats">${statBadges(p)}</span>`;
       row.addEventListener('click', () => onPlayerClick(p));
       listEl.appendChild(row);
     }
