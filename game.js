@@ -194,13 +194,28 @@
       const row = document.createElement('button');
       row.className = 'player';
       row.disabled = !pickable;
-      const hand = p.isGoalie ? '' : ` <span class="hand">${p.hand || '?'}</span>`;
+      const hand = p.isGoalie ? '' : `<span class="hand">${p.hand || '?'}</span>`;
       row.innerHTML =
-        `<span class="pinfo">${positionTags(p)}${hand}` +
-        `<span class="pname">${p.n}</span></span>` +
-        `<span class="stats">${statBadges(p)}</span>`;
+        `<span class="pos-col">${positionTags(p)}</span>` +
+        `<span class="pcontent">` +
+          `<span class="pname-row"><span class="pname">${p.n}</span>${hand}</span>` +
+          `<span class="stats">${statBadges(p)}</span>` +
+        `</span>`;
       row.addEventListener('click', () => onPlayerClick(p));
       listEl.appendChild(row);
+    }
+
+    // Fit names to their container — one proportional font-size reduction if needed.
+    requestAnimationFrame(() => fitNames(listEl));
+  }
+
+  function fitNames(containerEl) {
+    for (const el of containerEl.querySelectorAll('.pname')) {
+      el.style.fontSize = '';
+      if (el.offsetWidth > 0 && el.scrollWidth > el.offsetWidth) {
+        const base = parseFloat(getComputedStyle(el).fontSize);
+        el.style.fontSize = Math.max(7.5, base * (el.offsetWidth / el.scrollWidth) * 0.96) + 'px';
+      }
     }
   }
 

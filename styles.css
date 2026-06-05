@@ -131,23 +131,51 @@ h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: 1.5px; color
 @media (max-width: 420px) { .pick-lists { grid-template-columns: 1fr; } }
 .players { max-height: 56vh; overflow-y: auto; display: flex; flex-direction: column; gap: 0.35rem; padding-right: 0.2rem; }
 .plist-head { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin: 0.5rem 0 0.1rem; position: sticky; top: 0; background: var(--panel); padding: 0.2rem 0; }
+/* Player card — position column on the left, name+stats on the right */
 .player {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 0.3rem;
+  display: flex; flex-direction: row; align-items: stretch;
   background: var(--bg2); border: 1px solid var(--line); border-radius: 10px;
-  padding: 0.45rem 0.65rem; cursor: pointer; text-align: left; color: var(--text);
-  font: inherit; transition: border-color 0.15s, transform 0.1s; width: 100%;
+  padding: 0; cursor: pointer; text-align: left; color: var(--text);
+  font: inherit; transition: border-color 0.15s, transform 0.1s;
+  width: 100%; overflow: hidden;
 }
 .player:hover:not(:disabled) { border-color: var(--accent); transform: translateX(2px); }
 .player:disabled { opacity: 0.38; cursor: not-allowed; }
 .player.off { border-style: dashed; }
-.pinfo { display: flex; align-items: center; gap: 0.4rem; width: 100%; min-width: 0; }
-.player .pname { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
-.player .hand { flex-shrink: 0; font-size: 0.6rem; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 0.25rem; }
-.stats { display: flex; flex-wrap: wrap; gap: 0.2rem 0.45rem; width: 100%; }
-.st { font-size: 0.70rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Left strip: position badges stacked vertically, filling full card height */
+.pos-col {
+  display: flex; flex-direction: column; align-items: stretch;
+  flex-shrink: 0; width: 26px;
+  border-right: 1px solid rgba(255,255,255,0.07);
+}
+.pos-col .pos {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  border-radius: 0; padding: 0; font-size: 0.55rem; min-height: 14px; line-height: 1;
+}
+
+/* Right section: name row on top, stats below */
+.pcontent {
+  flex: 1; min-width: 0; padding: 0.35rem 0.55rem;
+  display: flex; flex-direction: column; gap: 0.2rem;
+}
+.pname-row {
+  display: flex; align-items: center; gap: 0.35rem;
+  min-width: 0; overflow: hidden; width: 100%;
+}
+.player .pname {
+  font-weight: 700; white-space: nowrap; overflow: hidden;
+  flex: 1; min-width: 0; font-size: 0.88rem;
+}
+.player .hand {
+  flex-shrink: 0; font-size: 0.58rem; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 4px; padding: 0 0.22rem; line-height: 1.5;
+}
+.stats { display: flex; flex-wrap: wrap; gap: 0.18rem 0.4rem; }
+.st { font-size: 0.68rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .st b { color: var(--text); font-weight: 700; }
 .st b.imp { color: var(--muted); }
-.offtag { font-size: 0.6rem; font-weight: 800; color: var(--bad); margin-left: 0.35rem; letter-spacing: 0.5px; white-space: nowrap; }
+.offtag { font-size: 0.58rem; font-weight: 800; color: var(--bad); margin-left: 0.3rem; letter-spacing: 0.5px; white-space: nowrap; }
 
 /* Sort tabs — compact pill row above each player column */
 .sort-ctrl { display: flex; flex-wrap: wrap; gap: 0.2rem; margin-bottom: 0.3rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--line); }
