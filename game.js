@@ -31,8 +31,8 @@
   // State
   let roster = new Array(SLOTS.length).fill(null);
   let drafted = new Set();
-  let teamRerollLeft = 1;
-  let decadeRerollLeft = 1;
+  let teamRerollLeft = 3;    // three Team rerolls per run
+  let decadeRerollLeft = 1;  // one Era reroll per run
   let curTeam = null, curDecade = null;
   let pendingPlayer = null;   // player waiting for the user to pick a slot
 
@@ -51,24 +51,42 @@
   }
   const erasFor = (t) => DATA.eras.filter((e) => t.eras[e]);
 
+  // Returns the slot categories this player is eligible to fill.
+  // Centers can play any forward slot (C, LW, RW) — centers shifting to wing is
+  // hockey's most common positional move, and the data backs it up: if a player's
+  // career positions include C, they can fill any forward slot.
+  // Wings (L/R only) can play either wing but not center.
+  // Defensemen fill LD or RD only.
+  function catsOf(p) {
+    if (p.isGoalie) return ['G'];
+    if (p.pos === 'D') return ['D'];
+    const positions = p.positions || [p.pos];
+    const hasC = positions.includes('C');
+    const hasW = positions.some(x => x === 'L' || x === 'R');
+    if (hasC) return ['C', 'W'];   // centers can play any forward slot
+    return ['W'];                   // pure wings stay at wing
+  }
+
   // All slot-position labels a player is intrinsically eligible for.
   function positionTags(p) {
     if (p.isGoalie) return `<span class="pos G">G</span>`;
-    if (p.pos === 'C')  return `<span class="pos C">C</span>`;
-    if (p.pos === 'D')  return `<span class="pos D">LD</span><span class="pos D">RD</span>`;
-    return `<span class="pos W">LW</span><span class="pos W">RW</span>`;
+    if (p.pos === 'D') return `<span class="pos D">LD</span><span class="pos D">RD</span>`;
+    const cats = catsOf(p);
+    const tags = [];
+    if (cats.includes('C')) tags.push(`<span class="pos C">C</span>`);
+    if (cats.includes('W')) { tags.push(`<span class="pos W">LW</span>`); tags.push(`<span class="pos W">RW</span>`); }
+    return tags.join('');
   }
 
   const isJakeAllen = (p) => p.n === 'Jake Allen';
 
-  // All slots a player CAN go into (respects position; open slots only — except
-  // Jake Allen in easter egg mode, who can fill ANY slot including the goalie slot
-  // even if it's already occupied, displacing whoever is there).
+  // All slots a player CAN go into (respects position eligibility; open slots only).
+  // Jake Allen in easter egg mode can fill ANY slot, occupied or not.
   function validSlotsFor(p) {
     if (easterActive && isJakeAllen(p))
-      return SLOTS.map((s, i) => ({ s, i }));  // all slots, occupied or not
-    const cat = catOf(p);
-    return SLOTS.map((s, i) => ({ s, i })).filter((x) => x.s.cat === cat && !roster[x.i]);
+      return SLOTS.map((s, i) => ({ s, i }));
+    const cats = catsOf(p);
+    return SLOTS.map((s, i) => ({ s, i })).filter((x) => cats.includes(x.s.cat) && !roster[x.i]);
   }
   const isPickable = (p) => {
     if (easterActive && isJakeAllen(p)) return true;  // always green in egg mode
@@ -178,11 +196,11 @@
 
     $('reroll-team').disabled = teamRerollLeft <= 0;
     $('reroll-decade').disabled = decadeRerollLeft <= 0;
-    $('reroll-team').title = teamRerollLeft > 0 ? 'Team reroll (1 left)' : 'Team reroll used';
+    $('reroll-team').title = teamRerollLeft > 0 ? `Team reroll (${teamRerollLeft} left)` : 'Team reroll used';
     $('reroll-decade').title = decadeRerollLeft > 0 ? 'Era reroll (1 left)' : 'Era reroll used';
     const parts = [];
-    if (teamRerollLeft > 0) parts.push('Team reroll available');
-    if (decadeRerollLeft > 0) parts.push('Era reroll available');
+    if (teamRerollLeft > 0) parts.push(`${teamRerollLeft} Team reroll${teamRerollLeft > 1 ? 's' : ''} left`);
+    if (decadeRerollLeft > 0) parts.push('Era reroll left');
     $('reroll-note').textContent = parts.length ? parts.join(' · ') : 'No rerolls left';
 
     $('roll-panel').classList.add('hidden');
@@ -324,7 +342,7 @@
   function reset() {
     roster = new Array(SLOTS.length).fill(null);
     drafted = new Set();
-    teamRerollLeft = 1;
+    teamRerollLeft = 3;
     decadeRerollLeft = 1;
     easterActive = false;
     curTeam = curDecade = pendingPlayer = null;

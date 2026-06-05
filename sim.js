@@ -41,19 +41,23 @@
   // Offense
   const IDEAL_APG_RATIO = 1.80;  // NHL norm: assists outnumber goals 1.8:1
   const SPG_TEAM_AVG = 13.0;     // 5 skaters × ~2.6 shots/game = league baseline
-  const HPG_COEFF = 0.012;       // physical play bonus per HIT/G unit
+  const HPG_OFF_COEFF = 0.010;   // physical play → possession → scoring opportunity
   const PIM_OFF_COEFF = 0.024;   // each PIM/G unit costs offensive output
   const PLAYMAKING_MIN = 0.78;   // floor: even the worst all-sniper team isn't useless
+  const D_OFF_COEFF = 0.055;     // elite offensive D (Orr, Coffey, Makar) add xGF
+                                  // via power-play QB, breakout passes, and zone entries
 
-  // Defense
+  // Defense — ALL five skaters contribute, not just the D-pair
   const SV_BASELINE = 0.860;     // league-floor save% (replacement-level goalie)
-  const SV_SCALE = 21.0;         // (sv% − baseline) × scale = sv quality index
-  const D_PPG_COEFF = 0.50;      // D-pair PPG contribution to defense quality
-  const D_BPG_COEFF = 0.30;      // D-pair BLK/G contribution to defense quality
-  const FWD_BPG_COEFF = 0.09;    // forward BLK/G (smaller but real)
+  const SV_SCALE = 26.0;         // (sv% − baseline) × scale = sv quality index
+  const D_PPG_COEFF = 0.48;      // D-pair PPG (their offensive skill proxies two-way
+                                  // intelligence: breakouts, puck-moving, zone control)
+  const BPG_COEFF = 0.22;        // ALL skaters' BLK/G — forwards and D both block shots
+  const HPG_DEF_COEFF = 0.038;   // ALL skaters' HIT/G — physical play wins puck battles
+                                  // in all three zones, suppressing shots
   const PIM_OPP_COEFF = 0.056;   // each PIM/G unit adds xGA via opponent PP
-  const GA_BASE = 4.95;          // xGA for a team with no defensive value
-  const GA_SLOPE = 1.24;         // how steeply elite defense suppresses goals
+  const GA_BASE = 5.00;          // xGA for a team with no defensive value
+  const GA_SLOPE = 1.25;         // how steeply elite defense suppresses goals
 
   const SV_MIN = 0.860, SV_MAX = 0.940;
   const XGF_MIN = 0.80, XGA_MIN = 0.25;
@@ -104,49 +108,60 @@
       totalAPG  += apg;
       totalSPG  += eff(p, 'spg');
       totalHPG  += eff(p, 'hpg');
-      totalPIMG += p.pimpg || 0;     // PIM happens regardless of side
-      rawScoring += gpg + 0.5 * apg; // scoring involvement (Goals Created style)
+      totalPIMG += p.pimpg || 0;
+      rawScoring += gpg + 0.5 * apg; // Goals Created style — all 5 skaters
     }
 
-    // Playmaking balance: the ratio of team APG to GPG vs. the NHL norm.
-    // Too low → isolated snipers who can't set each other up.
-    // Too high → playmakers with nobody to finish (soft cap, not as penalized).
+    // Playmaking balance: too many snipers with nobody to set them up → penalty.
     const assistRatio = totalAPG / Math.max(0.5, totalGPG);
     const playmakingFactor = Math.min(1.02,
       Math.max(PLAYMAKING_MIN, assistRatio / IDEAL_APG_RATIO));
 
-    // Shot volume: more shots on net (Corsi For) = more scoring opportunities.
+    // Shot volume (Corsi-style): more shots = more chances.
     const shotFactor = 0.88 + Math.min(0.17, (totalSPG / SPG_TEAM_AVG) * 0.17);
 
-    // Physical play → puck battles won → possession → cleaner scoring chances.
-    const physBonus = totalHPG * HPG_COEFF;
+    // Physical play → puck battles → offensive zone possession.
+    const physBonus = totalHPG * HPG_OFF_COEFF;
 
-    // Penalty discipline: PIM creates short-handed situations.
+    // Penalty cost: short-handed situations reduce offensive zone time.
     const penaltyCost = totalPIMG * PIM_OFF_COEFF;
 
+    // Offensive D bonus: elite puck-moving defensemen (Orr, Coffey, Makar) QB
+    // the power play, drive breakouts, and generate offensive zone entries —
+    // their offensive output ADDS to xGF beyond their rawScoring share.
+    const dOffPPG = dPair.reduce((s, p) => s + eff(p, 'gpg') + eff(p, 'apg'), 0);
+    const dOffBonus = dOffPPG * D_OFF_COEFF;
+
     const xGF = Math.max(XGF_MIN,
-      rawScoring * playmakingFactor * shotFactor + physBonus - penaltyCost);
+      rawScoring * playmakingFactor * shotFactor + physBonus + dOffBonus - penaltyCost);
 
     // ── Defense ──────────────────────────────────────────────────────────────
+    // ALL five skaters contribute to defense — not just the D-pair.
     const sv = Math.min(SV_MAX, Math.max(SV_MIN, goalie.svpct || 0.88));
 
     // Goalie quality above replacement.
     const svQuality = (sv - SV_BASELINE) * SV_SCALE;
 
-    // D-pair quality: elite offensive D (Orr, Coffey, Makar) maintain possession
-    // in the defensive zone and their BLK/G physically reduces shots on net.
-    const dPPG = dPair.reduce((s, p) => s + eff(p, 'gpg') + eff(p, 'apg'), 0);
-    const dBPG = dPair.reduce((s, p) => s + eff(p, 'bpg'), 0);
-    const dQuality = D_PPG_COEFF * dPPG + D_BPG_COEFF * dBPG;
+    // D-pair two-way quality: their PPG is a strong proxy for defensive intelligence
+    // (smart offensive D control zone exits, maintain puck possession in the d-zone).
+    const dPPG = dOffPPG;  // same as computed above
 
-    // Forwards blocking shots — small but real contribution.
-    const fwdBPG = fwds.reduce((s, p) => s + eff(p, 'bpg'), 0);
-    const fwdBlock = fwdBPG * FWD_BPG_COEFF;
+    // ALL skaters' BLK/G: forwards and D-men both block shots in the defensive zone.
+    const totalBPG = skaters.reduce((s, p) => s + eff(p, 'bpg'), 0);
+
+    // ALL skaters' HIT/G: physical play in all three zones wins puck battles
+    // that translate directly to shot suppression.
+    const totalHPGdef = totalHPG;  // same accumulated value
 
     // Opponent power play from our penalties.
     const oppPP = totalPIMG * PIM_OPP_COEFF;
 
-    const defMetric = svQuality + dQuality + fwdBlock - oppPP;
+    const defMetric = svQuality
+      + D_PPG_COEFF * dPPG
+      + BPG_COEFF   * totalBPG
+      + HPG_DEF_COEFF * totalHPGdef
+      - oppPP;
+
     const xGA = Math.max(XGA_MIN, GA_BASE - GA_SLOPE * defMetric);
 
     // 0–100 summary ratings for the result card.
@@ -156,7 +171,7 @@
     return {
       xGF, xGA, attack, defense,
       totalGPG, totalAPG, totalSPG,
-      playmakingFactor, sv, defMetric,
+      playmakingFactor, dOffPPG, sv, defMetric,
     };
   }
 
@@ -187,8 +202,26 @@
     return k - 1;
   }
 
+  // Star synergy bonus — applied silently; not shown to the user.
+  // Having multiple star-caliber players on the same team creates chemistry
+  // that's greater than the sum of individual parts.
+  //   3-4 stars: tier 1 (mild boost)
+  //   5 stars:   tier 2 applied on top
+  //   6 stars:   tier 3 applied on top
+  const STAR_XGF_BOOST = 0.030; // +3% xGF per tier
+  const STAR_XGA_DRAG  = 0.030; // −3% xGA per tier
+
   function simulateSeason(lineup) {
     const e = expectedGoals(lineup);
+    let xGF = e.xGF, xGA = e.xGA;
+
+    const stars = lineup.filter(p => p.star).length;
+    if (stars >= 3) { xGF *= (1 + STAR_XGF_BOOST); xGA *= (1 - STAR_XGA_DRAG); }
+    if (stars >= 5) { xGF *= (1 + STAR_XGF_BOOST); xGA *= (1 - STAR_XGA_DRAG); }
+    if (stars >= 6) { xGF *= (1 + STAR_XGF_BOOST); xGA *= (1 - STAR_XGA_DRAG); }
+    xGF = Math.max(XGF_MIN, xGF);
+    xGA = Math.max(XGA_MIN, xGA);
+
     const rng = mulberry32(seedFrom(lineup));
     let w = 0, l = 0, t = 0;
     for (let game = 0; game < 82; game++) {
@@ -198,7 +231,7 @@
     }
     return {
       w, l, t, points: w * 2 + t,
-      xGF: +e.xGF.toFixed(2), xGA: +e.xGA.toFixed(2),
+      xGF: +xGF.toFixed(2), xGA: +xGA.toFixed(2),
       attack: e.attack, defense: e.defense,
     };
   }
