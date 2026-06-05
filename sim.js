@@ -218,19 +218,11 @@
     xGF = Math.max(XGF_MIN, xGF);
     xGA = Math.max(XGA_MIN, xGA);
 
-    // Sub-draw variance reduction: each game is simulated as K independent
-    // "periods", each drawing from Poisson(rate/K), then summed. The sum has
-    // the same expected goals as one full draw but K times less variance —
-    // less game-to-game luck, so a good lineup reliably earns its record.
-    const K = 4;
     const rng = mulberry32(seedFrom(lineup));
     let w = 0, l = 0, t = 0;
     for (let game = 0; game < 82; game++) {
-      let gf = 0, ga = 0;
-      for (let period = 0; period < K; period++) {
-        gf += poisson(xGF / K, rng);
-        ga += poisson(xGA / K, rng);
-      }
+      const gf = poisson(xGF, rng);
+      const ga = poisson(xGA, rng);
       if (gf > ga) w++; else if (gf < ga) l++; else t++;
     }
     return {

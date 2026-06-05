@@ -87,7 +87,7 @@
 xGA = base − slope · (sv_quality + D_PPG·0.48
       + allSkaters_BLK·0.22 + allSkaters_HIT·0.038 − PIM_penalty)</pre>
         <p><strong>Forwards' HIT and BLK contribute to defense</strong> — physical play wins puck battles in all three zones. <strong>Elite offensive D add an xGF bonus</strong> beyond their rawScoring share (power-play QB, breakouts, zone entries). A <em>playmaking balance factor</em> penalizes all-sniper or all-playmaker lineups (assists should outnumber goals ~1.8:1 in real NHL play). PIM costs you on both sides.</p>
-        <p>Then 82 games are simulated. For each game, four pairs of smaller Poisson draws are summed — <code>goalsFor = Σ Poisson(xGF/4)</code>, <code>goalsAgainst = Σ Poisson(xGA/4)</code> — then compared. Summing four sub-draws keeps the same average goals but reduces game-to-game variance by 4×, so a great lineup reliably earns a great record instead of getting unlucky. The draws are <strong>seeded from your exact roster</strong> — same lineup always returns the same record.</p>
+        <p>Then 82 independent games are simulated. For each game: draw a random integer from <code>Poisson(xGF)</code> for goals scored and one from <code>Poisson(xGA)</code> for goals allowed, then compare. The <strong>Poisson distribution</strong> gives you a random count that averages to its rate (λ) but bounces around it — if xGF is 4.2, any given game might produce 1 goal or 7. More wins come from having a high xGF and a low xGA, so that the gap between the two draws is reliably positive. There is no "luck" to reroll — the draws are <strong>seeded from your exact roster</strong>, so the same lineup always produces the same 82-game record.</p>
       </div>
     </details>
   </main>
