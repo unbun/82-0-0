@@ -25,9 +25,23 @@ const AWEB = 'https://api-web.nhle.com/v1';
 const REST = 'https://api.nhle.com/stats/rest/en';
 const MODERN_START = 20052006; // hits/blocks (real-time) tracked from here
 const SHOTS_START_YEAR = 1959;  // shots tracked from 1959-60
-const MIN_GP_FACTOR = 0.03;     // include any skater who played ~3% of a decade's games
+const MIN_GP_FACTOR = 0.03;     // include any skater who played ~3% of an era's games
 const TOP_SKATERS = Infinity;   // list every player with data — no cap
 const TOP_GOALIES = 10;
+
+// Custom era boundaries (start year inclusive → era label).
+// Seasons whose start year falls before 1942 are excluded entirely.
+const ERAS = ['Original Six', 'Expansion', '90s', '2000s', '2010s', '2020s'];
+function eraOf(seasonId) {
+  const yr = Math.floor(seasonId / 10000);
+  if (yr < 1942) return null;          // pre-Original Six — excluded
+  if (yr < 1967) return 'Original Six'; // 1942-43 through 1966-67
+  if (yr < 1992) return 'Expansion';   // 1967-68 through 1991-92
+  if (yr < 2000) return '90s';         // 1992-93 through 1999-2000
+  if (yr < 2010) return '2000s';
+  if (yr < 2020) return '2010s';
+  return '2020s';
+}
 
 // ---- the 32 current franchises. extraCodes = relocations the NHL counts as a
 // DIFFERENT franchiseId but that we fold in (Utah<-Coyotes lineage, Ottawa<-
@@ -67,7 +81,6 @@ const TEAMS = [
   ['WPG', 'Winnipeg Jets', ['Atlanta Thrashers (1999)', 'Winnipeg Jets (2011–present)']],
 ];
 
-const decadeOf = (seasonId) => `${Math.floor(Math.floor(seasonId / 10000) / 10) * 10}s`;
 const startYear = (seasonId) => Math.floor(seasonId / 10000);
 
 async function fetchJSON(url, cacheKey) {
@@ -142,9 +155,10 @@ async function main() {
     const data = await fetchJSON(`${AWEB}/club-stats/${code}/${season}/2`, `cs_${code}_${season}`);
     if (++done % 200 === 0) console.log(`  …${done}/${teamSeasons.length}`);
     if (!data || data.__404) return;
-    const dec = decadeOf(season);
+    const era = eraOf(season);
+    if (!era) return;  // pre-1942 — excluded
     for (const p of data.skaters || []) {
-      const k = `${fi}|${dec}|${p.playerId}`;
+      const k = `${fi}|${era}|${p.playerId}`;
       const a = accSk(k, { id: p.playerId, n: fullName(p), pos: p.positionCode, gp: 0, g: 0, a: 0, sh: 0, pim: 0, shotsEras: 0 });
       a.gp += p.gamesPlayed || 0; a.g += p.goals || 0; a.a += p.assists || 0;
       a.pim += p.penaltyMinutes || 0;
@@ -152,7 +166,7 @@ async function main() {
       if (typeof p.shots === 'number') { a.sh += p.shots; a.shotsEras += p.gamesPlayed || 0; }
     }
     for (const p of data.goalies || []) {
-      const k = `${fi}|${dec}|${p.playerId}`;
+      const k = `${fi}|${era}|${p.playerId}`;
       const a = accG(k, { id: p.playerId, n: fullName(p), gp: 0, saves: 0, sa: 0, ga: 0, toi: 0, gaaGP: 0, gaaSum: 0 });
       a.gp += p.gamesPlayed || 0; a.ga += p.goalsAgainst || 0; a.toi += p.timeOnIce || 0;
       if (typeof p.shotsAgainst === 'number') { a.sa += p.shotsAgainst; a.saves += p.saves || 0; }
@@ -186,12 +200,13 @@ async function main() {
   // attach realtime hits/blocks back onto skater accumulators
   for (const { fi, code, season } of teamSeasons) {
     if (season < MODERN_START) continue;
-    const dec = decadeOf(season);
+    const era = eraOf(season);
+    if (!era) continue;
     const data = JSON.parse(fs.readFileSync(path.join(CACHE, `cs_${code}_${season}.json`), 'utf8'));
     for (const p of data.skaters || []) {
       const rt = hb.get(`${p.playerId}|${season}`);
       if (!rt) continue;
-      const a = skAcc.get(`${fi}|${dec}|${p.playerId}`);
+      const a = skAcc.get(`${fi}|${era}|${p.playerId}`);
       if (!a) continue;
       a.hits = (a.hits || 0) + rt.hits;
       a.blocks = (a.blocks || 0) + rt.blocks;
@@ -199,12 +214,13 @@ async function main() {
     }
   }
 
-  // 3) Approx games per team per decade, to set a min-GP threshold per decade.
-  const gamesPerSeason = (yr) => (yr < 1942 ? 48 : yr < 1946 ? 50 : yr < 1967 ? 70 : yr < 1974 ? 78 : yr < 1992 ? 80 : 82);
-  const decSeasons = {};
+  // 3) Approx games per season (for min-GP threshold).
+  const gamesPerSeason = (yr) => (yr < 1946 ? 50 : yr < 1967 ? 70 : yr < 1974 ? 78 : yr < 1992 ? 80 : 82);
+  const eraSeasons = {};  // era label -> Set of season IDs in that era
   for (const { season } of teamSeasons) {
-    const d = decadeOf(season);
-    (decSeasons[d] ??= new Set()).add(season);
+    const era = eraOf(season);
+    if (!era) continue;
+    (eraSeasons[era] ??= new Set()).add(season);
   }
 
   // 4) Imputation tables from modern data: hits/blocks per game by (pos, ppgTier).
@@ -224,26 +240,34 @@ async function main() {
   const hbFallback = { h: median(Object.values(hbSamples).flatMap((s) => s.h)) ?? 1.2, b: median(Object.values(hbSamples).flatMap((s) => s.b)) ?? 0.8 };
   const imputeHB = (pos, ppg) => hbTable[`${pos}|${ppgTier(ppg)}`] || hbTable[`${pos}|mid`] || hbFallback;
 
-  // 5) Assemble final per-franchise/decade lists.
+  // 5) Assemble final per-franchise/era lists.
   console.log('Assembling final lists…');
-  const out = { decades: ['1910s','1920s','1930s','1940s','1950s','1960s','1970s','1980s','1990s','2000s','2010s','2020s'], teams: [] };
+  const out = { eras: ERAS, teams: [] };
   const handNeeded = new Set();
 
-  // group accumulators by franchise+decade
+  // group accumulators by franchise+era (key format: "fi|era|playerId")
   const groupSk = new Map(); const groupG = new Map();
-  for (const [k, a] of skAcc) { const [fi, dec] = k.split('|'); (groupSk.get(fi + '|' + dec) ?? groupSk.set(fi + '|' + dec, []).get(fi + '|' + dec)).push(a); }
-  for (const [k, a] of gAcc) { const [fi, dec] = k.split('|'); (groupG.get(fi + '|' + dec) ?? groupG.set(fi + '|' + dec, []).get(fi + '|' + dec)).push(a); }
+  for (const [k, a] of skAcc) {
+    const pipe1 = k.indexOf('|'), pipe2 = k.indexOf('|', pipe1 + 1);
+    const groupKey = k.slice(0, pipe2);  // "fi|era"
+    (groupSk.get(groupKey) ?? groupSk.set(groupKey, []).get(groupKey)).push(a);
+  }
+  for (const [k, a] of gAcc) {
+    const pipe1 = k.indexOf('|'), pipe2 = k.indexOf('|', pipe1 + 1);
+    const groupKey = k.slice(0, pipe2);
+    (groupG.get(groupKey) ?? groupG.set(groupKey, []).get(groupKey)).push(a);
+  }
 
   for (let fi = 0; fi < franchises.length; fi++) {
     const fr = franchises[fi];
-    const eras = {};
-    for (const dec of out.decades) {
-      const sk = groupSk.get(fi + '|' + dec) || [];
-      const go = groupG.get(fi + '|' + dec) || [];
+    const eraData = {};
+    for (const era of ERAS) {
+      const sk = groupSk.get(fi + '|' + era) || [];
+      const go = groupG.get(fi + '|' + era) || [];
       if (!sk.length && !go.length) continue;
-      // min GP to qualify: a quarter of the games this franchise played in the decade.
-      const teamDecGames = [...(decSeasons[dec] || [])].reduce((s, ss) => s + gamesPerSeason(startYear(ss)), 0);
-      const minGames = Math.max(15, Math.round(teamDecGames * MIN_GP_FACTOR));
+      // min GP: 3% of the total games played in this era.
+      const eraGameCount = [...(eraSeasons[era] || [])].reduce((s, ss) => s + gamesPerSeason(startYear(ss)), 0);
+      const minGames = Math.max(15, Math.round(eraGameCount * MIN_GP_FACTOR));
 
       const skaters = sk
         .filter((a) => a.gp >= minGames)
@@ -285,10 +309,10 @@ async function main() {
         .sort((x, y) => y.gp - x.gp)
         .slice(0, TOP_GOALIES);
 
-      if (skaters.length || goalies.length) eras[dec] = { skaters, goalies };
+      if (skaters.length || goalies.length) eraData[era] = { skaters, goalies };
     }
-    out.teams.push({ id: fr.id, name: fr.name, history: fr.history, eras });
-    console.log(`  ${fr.id}: ${Object.keys(eras).length} decades`);
+    out.teams.push({ id: fr.id, name: fr.name, history: fr.history, eras: eraData });
+    console.log(`  ${fr.id}: ${Object.keys(eraData).length} eras`);
   }
 
   // 6) Backfill shot hand for skaters not seen in realtime (older players).
@@ -298,13 +322,13 @@ async function main() {
     const j = await fetchJSON(`${AWEB}/player/${pid}/landing`, `player_${pid}`);
     if (j && j.shootsCatches) handOf.set(pid, j.shootsCatches);
   });
-  // stamp hand onto every skater (wingers/D use it for off-side; default 'L')
-  for (const t of out.teams) for (const dec of Object.keys(t.eras))
-    for (const s of t.eras[dec].skaters) s.hand = handOf.get(s.id) || 'L';
+  // stamp hand onto every skater
+  for (const t of out.teams) for (const era of Object.keys(t.eras))
+    for (const s of t.eras[era].skaters) s.hand = handOf.get(s.id) || 'L';
 
   // 7) Write data.js (global, works on file:// and GitHub Pages).
   const banner = `/* 82-0-0 data — generated by etl/build-data.mjs from official NHL APIs.\n` +
-    ` * Skaters ranked by points/game (min ${Math.round(MIN_GP_FACTOR * 100)}% of decade games); goalies by games played.\n` +
+    ` * Skaters ranked by points/game (min ${Math.round(MIN_GP_FACTOR * 100)}% of era games); goalies by games played.\n` +
     ` * imp flags mark stats imputed for eras the NHL didn't track (shots pre-1959,\n` +
     ` * hits/blocks pre-2005, goalie save% pre-~1955). Do not edit by hand.\n */\n`;
   const js = banner + `(function(g){g.NHL_DATA=${JSON.stringify(out)};})(typeof window!=='undefined'?window:globalThis);\n`;

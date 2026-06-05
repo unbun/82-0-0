@@ -49,7 +49,7 @@
       ...era.goalies.map((p) => ({ ...p, isGoalie: true })),
     ];
   }
-  const decadesFor = (t) => DATA.decades.filter((d) => t.eras[d]);
+  const erasFor = (t) => DATA.eras.filter((e) => t.eras[e]);
 
   // All slot-position labels a player is intrinsically eligible for.
   function positionTags(p) {
@@ -61,15 +61,19 @@
 
   const isJakeAllen = (p) => p.n === 'Jake Allen';
 
-  // All open slots a player CAN go into (respects position, not yet filled).
-  // In easter egg mode, Jake Allen can fill any open slot.
+  // All slots a player CAN go into (respects position; open slots only — except
+  // Jake Allen in easter egg mode, who can fill ANY slot including the goalie slot
+  // even if it's already occupied, displacing whoever is there).
   function validSlotsFor(p) {
     if (easterActive && isJakeAllen(p))
-      return SLOTS.map((s, i) => ({ s, i })).filter((x) => !roster[x.i]);
+      return SLOTS.map((s, i) => ({ s, i }));  // all slots, occupied or not
     const cat = catOf(p);
     return SLOTS.map((s, i) => ({ s, i })).filter((x) => x.s.cat === cat && !roster[x.i]);
   }
-  const isPickable = (p) => !drafted.has(p.id) && validSlotsFor(p).length > 0;
+  const isPickable = (p) => {
+    if (easterActive && isJakeAllen(p)) return true;  // always green in egg mode
+    return !drafted.has(p.id) && validSlotsFor(p).length > 0;
+  };
   const bucketHasPick = (team, decade) => poolFor(team, decade).some(isPickable);
   const filledCount = () => roster.filter(Boolean).length;
 
@@ -77,14 +81,13 @@
   // ── rolling ──────────────────────────────────────────────────────────────
 
   function rollFresh() {
-    let team, decade, guard = 0;
+    let team, era, guard = 0;
     do {
       team = rnd(TEAMS);
-      const ds = decadesFor(team);
-      decade = rnd(ds);
+      era = rnd(erasFor(team));
       guard++;
-    } while (!bucketHasPick(team, decade) && guard < 800);
-    curTeam = team; curDecade = decade;
+    } while (!bucketHasPick(team, era) && guard < 800);
+    curTeam = team; curDecade = era;
     showPick();
   }
 
@@ -99,7 +102,7 @@
 
   function rerollDecade() {
     if (decadeRerollLeft <= 0) return;
-    const opts = decadesFor(curTeam).filter((d) => d !== curDecade && bucketHasPick(curTeam, d));
+    const opts = erasFor(curTeam).filter((e) => e !== curDecade && bucketHasPick(curTeam, e));
     if (!opts.length) return;
     decadeRerollLeft--;
     curDecade = rnd(opts);
@@ -176,10 +179,10 @@
     $('reroll-team').disabled = teamRerollLeft <= 0;
     $('reroll-decade').disabled = decadeRerollLeft <= 0;
     $('reroll-team').title = teamRerollLeft > 0 ? 'Team reroll (1 left)' : 'Team reroll used';
-    $('reroll-decade').title = decadeRerollLeft > 0 ? 'Decade reroll (1 left)' : 'Decade reroll used';
+    $('reroll-decade').title = decadeRerollLeft > 0 ? 'Era reroll (1 left)' : 'Era reroll used';
     const parts = [];
     if (teamRerollLeft > 0) parts.push('Team reroll available');
-    if (decadeRerollLeft > 0) parts.push('Decade reroll available');
+    if (decadeRerollLeft > 0) parts.push('Era reroll available');
     $('reroll-note').textContent = parts.length ? parts.join(' · ') : 'No rerolls left';
 
     $('roll-panel').classList.add('hidden');
@@ -225,6 +228,7 @@
 
   function placePlayer(p, slot) {
     const { s, i } = slot;
+    if (roster[i]) drafted.delete(roster[i].id);  // evict occupant (jake mode)
     const offside = !!SIM.offsidePenalty(p.hand, s.side);
     roster[i] = { ...p, slot: s.code, slotSide: s.side, offside, teamName: curTeam.name, teamId: curTeam.id, decade: curDecade };
     drafted.add(p.id);
