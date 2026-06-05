@@ -67,15 +67,20 @@
     return ['W'];                   // pure wings stay at wing
   }
 
-  // All slot-position labels a player is intrinsically eligible for.
+  // Position badges for the card's left column.
+  // Max 2 badges so the split is always even and nothing gets cut off:
+  //   Centers with wing eligibility → C (top) + W (bottom)
+  //   Pure wings or pure centers   → single badge
+  //   Defensemen                   → D  (not LD/RD — those are slot names, not player positions)
+  //   Goalies                      → G
   function positionTags(p) {
     if (p.isGoalie) return `<span class="pos G">G</span>`;
-    if (p.pos === 'D') return `<span class="pos D">LD</span><span class="pos D">RD</span>`;
+    if (p.pos === 'D') return `<span class="pos D">D</span>`;
     const cats = catsOf(p);
-    const tags = [];
-    if (cats.includes('C')) tags.push(`<span class="pos C">C</span>`);
-    if (cats.includes('W')) { tags.push(`<span class="pos W">LW</span>`); tags.push(`<span class="pos W">RW</span>`); }
-    return tags.join('');
+    if (cats.includes('C') && cats.includes('W'))
+      return `<span class="pos C">C</span><span class="pos W">W</span>`;
+    if (cats.includes('C')) return `<span class="pos C">C</span>`;
+    return `<span class="pos W">W</span>`;
   }
 
   const isJakeAllen = (p) => p.n === 'Jake Allen';

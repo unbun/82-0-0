@@ -49,12 +49,12 @@
 
   // Defense — ALL five skaters contribute, not just the D-pair
   const SV_BASELINE = 0.860;     // league-floor save% (replacement-level goalie)
-  const SV_SCALE = 30.0;         // (sv% − baseline) × scale = sv quality index
+  const SV_SCALE = 36.0;         // (sv% − baseline) × scale = sv quality index
   const D_PPG_COEFF = 0.48;      // D-pair PPG (their offensive skill proxies two-way
                                   // intelligence: breakouts, puck-moving, zone control)
   const BPG_COEFF = 0.22;        // ALL skaters' BLK/G — forwards and D both block shots
-  const HPG_DEF_COEFF = 0.038;   // ALL skaters' HIT/G — physical play wins puck battles
-                                  // in all three zones, suppressing shots
+  const HPG_DEF_COEFF = 0.022;   // ALL skaters' HIT/G — hits help possession but don't
+                                  // translate linearly to shot prevention (reduced weight)
   const PIM_OPP_COEFF = 0.056;   // each PIM/G unit adds xGA via opponent PP
   const GA_BASE = 5.00;          // xGA for a team with no defensive value
   const GA_SLOPE = 1.25;         // how steeply elite defense suppresses goals

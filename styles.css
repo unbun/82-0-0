@@ -145,15 +145,16 @@ h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: 1.5px; color
 .player:disabled { opacity: 0.38; cursor: not-allowed; }
 .player.off { border-style: dashed; }
 
-/* Position column: absolute, spans full card height automatically */
+/* Position column: absolute, spans full card height automatically.
+ * Grid with 1fr rows guarantees perfectly equal-height splits. */
 .pos-col {
   position: absolute; left: 0; top: 0; bottom: 0; width: 28px;
-  display: flex; flex-direction: column;
+  display: grid; grid-auto-rows: 1fr;
   border-right: 1px solid rgba(255,255,255,0.07);
   border-radius: 9px 0 0 9px; overflow: hidden;
 }
 .pos-col .pos {
-  flex: 1; display: flex; align-items: center; justify-content: center;
+  display: flex; align-items: center; justify-content: center;
   border-radius: 0; padding: 0; font-size: 0.54rem; line-height: 1;
 }
 
